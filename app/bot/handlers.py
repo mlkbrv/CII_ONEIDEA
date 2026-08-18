@@ -17,8 +17,8 @@ router = Router()
 
 
 def _webapp_keyboard() -> InlineKeyboardMarkup | None:
-    url = get_settings().telegram_webapp_url
-    if not url:
+    url = get_settings().telegram_webapp_url.strip()
+    if not url.startswith("https://"):
         return None
     return InlineKeyboardMarkup(
         inline_keyboard=[

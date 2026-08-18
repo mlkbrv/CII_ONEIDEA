@@ -4,6 +4,7 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import MenuButtonWebApp, WebAppInfo
 
 from app.bot.handlers import router
@@ -28,14 +29,20 @@ async def run_polling() -> None:
     await _bot.delete_webhook(drop_pending_updates=True)
     dp = Dispatcher()
     dp.include_router(router)
-    if settings.telegram_webapp_url:
-        await _bot.set_chat_menu_button(
-            menu_button=MenuButtonWebApp(
-                text="CCI",
-                web_app=WebAppInfo(url=settings.telegram_webapp_url),
+    webapp_url = settings.telegram_webapp_url.strip()
+    if webapp_url.startswith("https://"):
+        try:
+            await _bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="CCI",
+                    web_app=WebAppInfo(url=webapp_url),
+                )
             )
-        )
-        logger.info("Menu button URL set to %s", settings.telegram_webapp_url)
+            logger.info("Menu button URL set to %s", webapp_url)
+        except TelegramBadRequest:
+            logger.warning("Menu button URL rejected by Telegram: %s", webapp_url)
+    elif webapp_url:
+        logger.warning("TELEGRAM_WEBAPP_URL must be https://..., got %s", webapp_url)
     try:
         logger.info("Starting Telegram polling")
         await dp.start_polling(_bot, handle_signals=False)
