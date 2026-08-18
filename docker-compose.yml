@@ -38,5 +38,14 @@ services:
       - "18080:8000"
     restart: unless-stopped
 
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: cci-tunnel
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate --url http://api:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+
 volumes:
   cci_pgdata:
