@@ -38,4 +38,4 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-app.mount("/miniapp", StaticFiles(directory=MINIAPP_DIR, html=True), name="miniapp")
+app.mount("/oneidea", StaticFiles(directory=MINIAPP_DIR, html=True), name="miniapp")

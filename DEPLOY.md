@@ -15,12 +15,12 @@ Nginx/Caddy других проектов на 80/443 не трогаем. Дл�
 
 ```env
 TELEGRAM_BOT_TOKEN=123456:AA_токен_от_BotFather
-TELEGRAM_WEBAPP_URL=https://cci.твой-домен.com/miniapp/
+TELEGRAM_WEBAPP_URL=https://cci.твой-домен.com/oneidea/
 JWT_SECRET=длинный-случайный-секрет-хотя-бы-32-символа
 PROMO_CODE_PEPPER=ещё-одна-случайная-строка
 ```
 
-`TELEGRAM_WEBAPP_URL` должен быть **https** и заканчиваться на `/miniapp/`.
+`TELEGRAM_WEBAPP_URL` должен быть **https** и заканчиваться на `/oneidea/`.
 
 Запуск:
 
@@ -55,7 +55,7 @@ sudo certbot --nginx -d cci.твой-домен.com
 Проверка в браузере:
 
 - `https://cci.твой-домен.com/health`
-- `https://cci.твой-домен.com/miniapp/` — должна открыться страница промокода
+- `https://cci.твой-домен.com/oneidea/` — должна открыться страница промокода
 
 ---
 
@@ -90,7 +90,7 @@ Telegram открывает не «сайт», а Web App по HTTPS URL. Без
 URL, который везде должен быть **один и тот же**:
 
 ```
-https://cci.твой-домен.com/miniapp/
+https://cci.твой-домен.com/oneidea/
 ```
 
 Слэш в конце обязателен.
@@ -103,7 +103,7 @@ https://cci.твой-домен.com/miniapp/
 2. Выбери своего бота
 3. Title: `CCI`
 4. Short name: `cci` (латиница, без пробелов)
-5. **Web App URL:** `https://cci.твой-домен.com/miniapp/`
+5. **Web App URL:** `https://cci.твой-домен.com/oneidea/`
 6. Описание и иконка — по желанию
 
 ### 3.2. Кнопка меню у бота
@@ -113,7 +113,7 @@ https://cci.твой-домен.com/miniapp/
 1. `/mybots` → твой бот → **Bot Settings** → **Menu Button**
 2. Включи кнопку
 3. Текст: `CCI`
-4. URL: `https://cci.твой-домен.com/miniapp/`
+4. URL: `https://cci.твой-домен.com/oneidea/`
 
 Или командой:
 
@@ -128,7 +128,7 @@ https://cci.твой-домен.com/miniapp/
 В `.env` на сервере:
 
 ```env
-TELEGRAM_WEBAPP_URL=https://cci.твой-домен.com/miniapp/
+TELEGRAM_WEBAPP_URL=https://cci.твой-домен.com/oneidea/
 ```
 
 Ровно тот URL, что в BotFather. Потом:
@@ -164,7 +164,7 @@ CSV — plaintext для печати. В БД только хеши.
 ## Если Mini App не открывается
 
 - URL не https
-- URL без `/miniapp/`
+- URL без `/oneidea/`
 - BotFather и `.env` содержат разные URL
 - nginx не проксирует на `127.0.0.1:18080`
 - certbot не выписал сертификат на этот `server_name`
