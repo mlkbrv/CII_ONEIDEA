@@ -25,6 +25,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://cci:postgres@postgres:5432/cci
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
