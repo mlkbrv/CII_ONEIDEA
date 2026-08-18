@@ -1,0 +1,22 @@
+[project]
+name = "cci-backend"
+version = "0.1.0"
+description = "CCI Cola Fest backend"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115.0",
+    "sqlalchemy>=2.0.36",
+    "asyncpg>=0.30.0",
+    "pydantic-settings>=2.6.0",
+    "alembic>=1.14.0",
+    "uvicorn[standard]>=0.32.0",
+    "pyjwt>=2.10.0",
+    "aiogram>=3.17.0",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]

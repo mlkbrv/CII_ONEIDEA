@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>CCI Promo</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="sheet">
+      <p class="eyebrow">Cola Fest</p>
+      <h1>Промокод</h1>
+      <p class="lead">Введи код с банки или отсканируй QR</p>
+      <form id="redeem-form">
+        <label for="code">Код</label>
+        <input
+          id="code"
+          name="code"
+          type="text"
+          inputmode="text"
+          autocomplete="off"
+          autocapitalize="characters"
+          maxlength="64"
+          placeholder="XXXXXXXXXX"
+          required
+        />
+        <div class="actions">
+          <button type="submit" id="redeem-btn">Активировать</button>
+          <button type="button" id="scan-btn" class="ghost">Сканировать QR</button>
+        </div>
+      </form>
+      <p id="status" class="status" hidden></p>
+    </main>
+    <script src="./app.js"></script>
+  </body>
+</html>

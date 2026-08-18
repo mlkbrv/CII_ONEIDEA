@@ -1,0 +1,665 @@
+1. What is the project?
+
+CCI is a gamified Coca-Cola customer-engagement application.
+
+The main idea is to encourage people to buy Coca-Cola products more frequently by turning purchases into an interactive game.
+
+Instead of simply buying a Coca-Cola product and consuming it, the user can receive rewards from the purchase, use those rewards to customize a digital avatar, compete with friends, and participate in outfit battles.
+
+The core loop is:
+
+Buy Coca-Cola
+      ↓
+Scan/redeem purchase code
+      ↓
+Receive coins
+      ↓
+Spend coins on digital clothing/items
+      ↓
+Customize avatar
+      ↓
+Challenge friends
+      ↓
+Compete in outfit battles
+      ↓
+Followers vote
+      ↓
+Winner receives prize pool
+      ↓
+Winning streak increases
+      ↓
+User continues participating
+      ↓
+More engagement with Coca-Cola
+
+The business goal is not simply to create a game. The game is a marketing mechanism intended to increase Coca-Cola product purchases, engagement, and customer retention.
+
+2. Current development strategy
+
+We originally planned to build the complete product as a mobile application using Flutter.
+
+However, there is a Coca-Cola event called Cola Fest, where we want to test the concept earlier.
+
+Building and distributing the full mobile application would take significantly more time, so we are considering:
+
+Telegram Bot
+      +
+Telegram Mini App
+      +
+FastAPI backend
+      +
+PostgreSQL
+
+for the Cola Fest MVP.
+
+The Telegram Bot will primarily handle communication and notifications, while the Mini App will contain the actual game/application interface.
+
+Eventually, the full product can become:
+
+Flutter mobile app
+        +
+FastAPI backend
+        +
+PostgreSQL
+
+The important point is that the backend/business logic should be reusable.
+
+3. Main architecture
+
+The current backend architecture is:
+
+                  ┌──────────────────┐
+                  │    PostgreSQL    │
+                  │     Database     │
+                  └────────▲─────────┘
+                           │
+                     SQLAlchemy
+                           │
+                  ┌────────┴─────────┐
+                  │      FastAPI     │
+                  │                  │
+                  │ Business Logic   │
+                  │ REST API         │
+                  └─────▲───────┬────┘
+                        │       │
+              ┌─────────┘       └──────────┐
+              │                            │
+      ┌───────┴────────┐          ┌────────┴─────────┐
+      │ Telegram Bot   │          │ Telegram Mini App│
+      │                │          │                  │
+      │ Notifications  │          │ Game UI          │
+      │ Invitations    │          │ Avatar           │
+      │ Challenges     │          │ Shop             │
+      │ Results        │          │ Wardrobe         │
+      └────────────────┘          │ Battles          │
+                                  │ Friends          │
+                                  │ QR scanning      │
+                                  └──────────────────┘
+
+For the eventual mobile version:
+
+Flutter
+   │
+   ▼
+FastAPI
+   │
+   ▼
+PostgreSQL
+
+The backend should not contain UI-specific business logic.
+
+4. Users
+
+The application has a user system.
+
+A user has a profile containing information such as:
+
+username
+profile information
+avatar
+followers/following
+coins
+winning streak
+clothing/wardrobe information
+
+Users can:
+
+find other users
+follow/unfollow users
+view other users' profiles
+view their outfits
+potentially view their wardrobe if the user allows it
+challenge friends/followed users
+vote in competitions
+
+For the Telegram MVP, Telegram itself can provide the user's identity, so we don't necessarily need to build a traditional email/password registration experience.
+
+5. Avatar and clothing system
+
+A major part of the application is the user's digital avatar.
+
+The user can customize their avatar using digital clothing.
+
+We don't have the time or design resources to create all clothing ourselves, so the plan is to use ready-made 2D avatar/clothing assets.
+
+The clothing system contains concepts such as:
+
+Avatar
+   │
+   ├── Hair
+   ├── Top
+   ├── Bottom
+   ├── Shoes
+   └── Accessories
+
+Users can obtain clothing from the shop.
+
+Shop flow
+Shop
+ ↓
+Filter/search clothing
+ ↓
+Select item
+ ↓
+Preview item on avatar
+ ↓
+Item appears with locked/preview state
+ ↓
+Purchase with coins
+ ↓
+Choose:
+   ├── Equip immediately
+   └── Put in wardrobe
+
+The wardrobe stores clothing owned by the user.
+
+Users can later equip/unequip clothing.
+
+6. Coin economy
+
+Coins are the application's internal reward currency.
+
+The main intended way of receiving coins is through Coca-Cola product purchases.
+
+For example:
+
+Purchase Coca-Cola
+       ↓
+Scan/redeem code
+       ↓
+Validation
+       ↓
++50 coins
+
+Coins can then be spent on:
+
+clothing
+voting in competitions
+
+The competition voting system uses a prize pool.
+
+For example:
+
+User A contributes 10 coins
+User B contributes 10 coins
+Other users vote
+        ↓
+Prize pool = 20+ coins
+        ↓
+Winner receives prize
+
+For the MVP, the intended voting rule is:
+
+One vote costs one coin.
+
+The winner receives the accumulated prize pool.
+
+The purpose is to make voting more interesting while creating another reason for users to participate in the ecosystem.
+
+7. QR / barcode purchase system
+
+Originally, the plan was to have unique QR codes associated with Coca-Cola products.
+
+Each unique code would be stored in the database and could only be redeemed once.
+
+Conceptually:
+
+Unique QR #001
+Unique QR #002
+Unique QR #003
+...
+
+When a user scans:
+
+QR
+ ↓
+Backend
+ ↓
+Does this code exist?
+ ↓
+Has it already been redeemed?
+ ↓
+Is it valid/expired?
+ ↓
+Redeem
+ ↓
+Create coin transaction
+Current Cola Fest problem
+
+We may not be able to convince Coca-Cola to manufacture special QR codes for the event.
+
+We therefore considered using existing Coca-Cola barcodes.
+
+However, normal product barcodes are generally product identifiers, not unique identifiers for individual bottles.
+
+For example:
+
+Bottle A ─┐
+Bottle B ─┼── same product barcode
+Bottle C ─┤
+Bottle D ─┘
+
+Therefore, simply storing a barcode and preventing it from being scanned twice would not work correctly.
+
+The current investigation is around finding a way to verify an actual purchase, potentially through a unique purchase/receipt identifier or an event-specific mechanism.
+
+This issue is not completely finalized yet.
+
+8. Friends system
+
+Users have a social network inside the application.
+
+A user can:
+
+search for another user
+follow them
+unfollow them
+view their profile
+view their outfit
+see follower/following counts
+potentially view their wardrobe if permitted
+create a competition with them
+
+The flow is:
+
+Search
+ ↓
+User
+ ↓
+Profile
+ ↓
+[Follow]
+[Unfollow]
+[Challenge]
+
+If the user chooses Challenge, the application takes them to the competition flow.
+
+9. User search
+
+There will be a search bar where users can search for other users by name/username.
+
+Results display users.
+
+Selecting a user opens essentially the same profile experience as selecting someone from the Friends page.
+
+10. Competition system
+
+Competitions are one of the most important features.
+
+A user can challenge another user to an outfit battle.
+
+The general process:
+
+User A
+ ↓
+Select User B
+ ↓
+Choose competition duration
+ ↓
+Send request
+ ↓
+User B receives request
+ ↓
+Accept / Decline
+
+Currently planned duration presets include:
+
+30 minutes
+1 hour
+6 hours
+24 hours
+
+The challenger chooses the duration.
+
+11. Competition requests
+
+A competition request is separate from an actual competition.
+
+The request has states such as:
+
+pending
+accepted
+declined
+cancelled
+
+Only after acceptance does an actual competition get created.
+
+An important business rule is:
+
+A user can have only one active competition at a time.
+
+Another rule:
+
+If one competition request is accepted, other pending requests involving either participant are cancelled.
+
+This prevents a user from simultaneously entering multiple active battles.
+
+12. Active competition
+
+Once a request is accepted:
+
+Competition
+├── challenger
+├── opponent
+├── start time
+├── duration
+├── end time
+├── status
+├── prize pool
+├── total votes
+└── winner
+
+The competition runs for the selected duration.
+
+Users' followers can vote for either participant.
+
+Example:
+
+🔥 OUTFIT BATTLE
+
+
+Uzeir        VS        Ali
+
+
+[Vote Uzeir]
+[Vote Ali]
+
+Each vote costs one coin.
+
+The coin is added to the competition's prize pool.
+
+13. Competition result
+
+When the competition timer ends:
+
+Votes are counted
+        ↓
+Participant with more votes wins
+        ↓
+Winner receives prize pool
+        ↓
+Winner's winning streak increases
+        ↓
+Loser's winning streak resets
+
+Example:
+
+Uzeir: 72 votes
+Ali:   51 votes
+
+
+🏆 Uzeir wins
+
+
+Prize pool: 123 coins
+
+
+Uzeir winning streak: 4
+
+The winning streak is intended to provide another motivation for users to continue competing.
+
+14. Competition sections
+
+The application has two major competition views.
+
+My Competitions
+
+Shows competitions directly involving the current user.
+
+If the user has no active competition, the interface can show an empty state.
+
+There can also be:
+
+competition requests
+pending challenges
+active competition
+Other Competitions
+
+This shows competitions involving people the user follows.
+
+For the MVP, we are intentionally not implementing a recommendation algorithm.
+
+The initial approach is simply to show relevant competitions from the user's social network.
+
+15. Voting economy
+
+The voting system is intentionally simple for the MVP.
+
+1 vote = 1 coin
+
+The coin goes into the competition prize pool.
+
+At the end:
+
+Winner → entire prize pool
+
+The goal isn't to create a sophisticated financial system.
+
+The goal is to test whether spending earned coins on competitions makes the experience more engaging.
+
+The project intentionally doesn't overcomplicate coin transfers between users at the MVP stage.
+
+16. Notifications
+
+Notifications are important because competitions are time-based.
+
+For the Telegram MVP, the Telegram bot handles notifications.
+
+Examples:
+
+Challenge
+
+⚔️ You have been challenged by Uzeir!
+
+Competition accepted
+
+✅ Ali accepted your competition!
+
+Competition ending
+
+⏰ Your competition ends in 10 minutes!
+
+Result
+
+🏆 You won the competition!
+
+The bot can provide a button that opens the Mini App.
+
+For the future Flutter application, Telegram will eventually be replaced by a mobile push notification system.
+
+17. Telegram MVP
+
+For Cola Fest, the architecture is:
+
+Telegram Bot
+      │
+      │ notifications / invitations
+      ▼
+Telegram Mini App
+      │
+      │ REST API
+      ▼
+FastAPI
+      │
+      ▼
+PostgreSQL
+Bot
+
+The bot handles:
+
+/start
+notifications
+competition invitations
+reminders
+competition results
+links/buttons to open the Mini App
+Mini App
+
+The Mini App handles the actual interactive application:
+
+Home
+Profile
+Avatar
+Shop
+Wardrobe
+Friends
+Search
+Competitions
+Voting
+Leaderboard
+QR/barcode scanning
+
+The Mini App is essentially the temporary frontend for the Cola Fest experiment.
+
+18. Backend technology
+
+The current backend stack is:
+
+Python
+
+FastAPI
+
+Used for REST APIs and backend application logic.
+
+SQLAlchemy
+
+Used as the ORM and database model layer.
+
+PostgreSQL
+
+Main relational database.
+
+Alembic
+
+Used for database migrations.
+
+The backend structure is approximately:
+
+app/
+├── main.py
+│
+├── core/
+│   ├── config.py
+│   └── database.py
+│
+├── models/
+│   ├── user.py
+│   ├── avatar.py
+│   ├── clothing.py
+│   ├── competition.py
+│   └── ...
+│
+├── schemas/
+│   └── ...
+│
+├── routers/
+│   └── ...
+│
+├── services/
+│   └── ...
+│
+└── bot/
+    └── ...
+
+The models have already been written.
+
+The current development stage is moving from database models toward Alembic/database migration and API implementation.
+
+19. Database
+
+The database has been designed around several major domains.
+
+Authentication/users
+users
+auth_providers
+device_tokens
+Social system
+user_follows
+Avatar/clothing
+avatars
+clothing_categories
+clothing_items
+wardrobe
+equipped_items
+Products/rewards
+products
+product codes / QR-related system
+coin_transactions
+Competitions
+competition_requests
+competition_status
+competitions
+votes
+Notifications
+notifications
+notification_types
+
+The exact final schema should be treated as the source of truth rather than relying on this overview for individual column definitions.
+
+20. Business logic vs database models
+
+One important architectural principle for the project:
+
+Models describe data.
+
+For example:
+
+Competition
+
+describes what information a competition contains.
+
+Services implement business rules.
+
+For example:
+
+accept_competition_request()
+
+could:
+
+verify that the request is pending
+verify that the participants aren't already in active competitions
+create the competition
+mark the request accepted
+cancel conflicting pending requests
+send a notification
+
+Routers expose the functionality through HTTP.
+
+POST /competition-requests/{id}/accept
+
+So the general flow is:
+
+Mini App
+   ↓
+HTTP request
+   ↓
+FastAPI router
+   ↓
+Service / business logic
+   ↓
+SQLAlchemy
+   ↓
+PostgreSQL
+
+
+Временная система промокодов (под крышкой / на наклейках банок из специальной партии для фестиваля
