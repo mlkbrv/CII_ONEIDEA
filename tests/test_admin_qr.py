@@ -93,7 +93,7 @@ def cleanup() -> None:
         if product is not None:
             db.delete(product)
             db.commit()
-    print(f"\nCleaned up 1 product, its qr codes, and 2 test users.")
+    print("\nCleaned up 1 product, its qr codes, and 2 test users.")
 
 
 results = []

@@ -364,11 +364,11 @@ results.append(("empty history -> 200 with []", ok_empty, str(r.json())))
 
 # --- 9. Validation: bad limit/offset -> 422 --------------------------------
 bad_params = [
-    ("limit=0", f"/users/me/transactions?limit=0"),
-    ("limit=51", f"/users/me/transactions?limit=51"),
-    ("limit=-1", f"/users/me/transactions?limit=-1"),
-    ("limit=abc", f"/users/me/transactions?limit=abc"),
-    ("offset=-1", f"/users/me/transactions?offset=-1"),
+    ("limit=0", "/users/me/transactions?limit=0"),
+    ("limit=51", "/users/me/transactions?limit=51"),
+    ("limit=-1", "/users/me/transactions?limit=-1"),
+    ("limit=abc", "/users/me/transactions?limit=abc"),
+    ("offset=-1", "/users/me/transactions?offset=-1"),
 ]
 validation_all = all(
     client.get(path, headers=AUTH_A).status_code == 422 for name, path in bad_params

@@ -75,7 +75,7 @@ def cleanup() -> None:
             if user is not None:
                 db.delete(user)
         db.commit()
-    print(f"\nCleaned up 1 admin and 3 test users.")
+    print("\nCleaned up 1 admin and 3 test users.")
 
 
 results = []

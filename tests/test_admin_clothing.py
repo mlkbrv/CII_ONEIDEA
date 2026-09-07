@@ -50,7 +50,6 @@ from app.core.database import SessionLocal
 from app.main import app
 from app.models import (
     AvatarSlot,
-    ClothingAvailability,
     ClothingCategory,
     ClothingItem,
     CoinTransaction,

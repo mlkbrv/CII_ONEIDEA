@@ -37,7 +37,7 @@ warnings.filterwarnings(
 
 import jwt as pyjwt
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import SessionLocal

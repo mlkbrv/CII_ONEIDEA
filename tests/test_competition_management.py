@@ -333,8 +333,8 @@ try:
         outcomes.append(accept(TOKENS["G"], req).status_code)
 
     threads = [
-        threading.Thread(target=race_accept, args=(con3,), name=f"race_g_3"),
-        threading.Thread(target=race_accept, args=(con4,), name=f"race_g_4"),
+        threading.Thread(target=race_accept, args=(con3,), name="race_g_3"),
+        threading.Thread(target=race_accept, args=(con4,), name="race_g_4"),
     ]
     for t in threads:
         t.start()
