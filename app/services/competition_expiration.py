@@ -103,10 +103,18 @@ def complete_expired_competition(
     active_id = resolve_status_id(db, "active")
     completed_id = resolve_status_id(db, "completed")
 
+    # populate_existing is load-bearing, not decoration. The manual endpoint
+    # calls db.get(Competition, id) before delegating here, so this row is
+    # already in the Session's identity map. Without populate_existing,
+    # SQLAlchemy returns that cached instance and does NOT overwrite its
+    # attributes with the row it just locked — so the guarded status check
+    # below would read a stale "active" from before the concurrent winner
+    # committed, and the prize pool would be paid out a second time.
     competition = db.execute(
         select(Competition)
         .where(Competition.competition_id == competition_id)
         .with_for_update()
+        .execution_options(populate_existing=True)
     ).scalar_one_or_none()
     if competition is None:
         return CompletionOutcome.NOT_FOUND, None

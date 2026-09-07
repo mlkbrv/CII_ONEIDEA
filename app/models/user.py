@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, text
+from sqlalchemy import BigInteger, CheckConstraint, text
 from sqlalchemy.dialects.postgresql import CITEXT, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -53,11 +53,34 @@ class User(Base):
     # CITEXT requires `CREATE EXTENSION IF NOT EXISTS citext;` — see design
     # doc section 2.1 for why (case-insensitive uniqueness on username/email).
     username: Mapped[str] = mapped_column(CITEXT(), unique=True, nullable=False, index=True)
-    email: Mapped[str] = mapped_column(CITEXT(), unique=True, nullable=False, index=True)
 
-    # Nullable because OAuth-only accounts (future Google/Apple login) have
-    # no local password.
+    # Nullable since the Telegram MVP: an account created from a Mini App
+    # session has no email address to record. Still UNIQUE — Postgres does
+    # not consider two NULLs equal, so any number of Telegram-only accounts
+    # coexist while real addresses stay unique.
+    email: Mapped[str | None] = mapped_column(
+        CITEXT(), unique=True, nullable=True, index=True
+    )
+
+    # Nullable because OAuth-only accounts (future Google/Apple login) and
+    # Telegram accounts have no local password.
     password_hash: Mapped[str | None] = mapped_column(nullable=True)
+
+    # --- Telegram identity ------------------------------------------------
+    # Denormalised from auth_providers on purpose: every Mini App request
+    # that is not carrying a JWT resolves the account by telegram_id, so it
+    # is the hottest lookup in the system and deserves its own index rather
+    # than a join. The auth_providers row is still written, so the generic
+    # "which providers is this account linked to" question keeps one answer.
+    telegram_id: Mapped[int | None] = mapped_column(
+        BigInteger, unique=True, nullable=True, index=True
+    )
+    # Telegram's own @handle. Kept separate from `username` because ours is
+    # editable by the user and must stay unique in CITEXT, while Telegram's
+    # can change under us at any time and is only used for display.
+    telegram_username: Mapped[str | None] = mapped_column(nullable=True)
+    first_name: Mapped[str | None] = mapped_column(nullable=True)
+    last_name: Mapped[str | None] = mapped_column(nullable=True)
 
     profile_picture_url: Mapped[str | None] = mapped_column(nullable=True)
     biography: Mapped[str | None] = mapped_column(nullable=True)
@@ -69,6 +92,13 @@ class User(Base):
     # deactivated, not hard-deleted (the coin ledger and competition
     # history both depend on the user row still existing).
     is_active: Mapped[bool] = mapped_column(nullable=False, server_default=text("true"))
+
+    # TZ section 8: other users may view your wardrobe "if you allow it".
+    # Default open — the wardrobe is a showcase and hiding it is the
+    # deliberate choice, not the other way round.
+    wardrobe_public: Mapped[bool] = mapped_column(
+        nullable=False, server_default=text("true")
+    )
 
     # Administration flag. True only for internal operators; gates every
     # /admin/* endpoint through get_current_admin(). Promoted via SQL

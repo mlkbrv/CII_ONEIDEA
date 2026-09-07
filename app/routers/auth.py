@@ -14,9 +14,18 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.jwt import create_access_token
 from app.core.security import hash_password, verify_password
+from app.core.telegram import (
+    ExpiredInitDataError,
+    TelegramAuthError,
+    TelegramNotConfiguredError,
+    validate_init_data,
+    validate_login_widget_data,
+)
 from app.models import Avatar, User
+from app.schemas.telegram import TelegramInitDataLogin, TelegramWidgetLogin
 from app.schemas.token import LoginRequest, Token
 from app.schemas.user import UserRead, UserRegister
+from app.services.telegram_auth import get_or_create_telegram_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -109,3 +118,73 @@ def _duplicate_http_exception(exc: IntegrityError) -> HTTPException:
         detail = "Email or username is already registered"
 
     return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+
+# --- Telegram sign-in ------------------------------------------------------
+# There is no password here and no registration step. Telegram already
+# authenticated the person; a valid signature over their initData is the
+# credential, and the account is created on first contact. Both endpoints
+# return the same Token as /auth/login, so the client stores one JWT
+# regardless of which door it came through.
+
+
+@router.post("/telegram", response_model=Token)
+def login_with_telegram(
+    payload: TelegramInitDataLogin, db: Session = Depends(get_db)
+) -> Token:
+    """Mini App sign-in. Body carries the raw Telegram.WebApp.initData."""
+    telegram_user = _verify(validate_init_data, payload.init_data)
+    user = get_or_create_telegram_user(db, telegram_user)
+    return _token_for(user)
+
+
+@router.post("/telegram-login", response_model=Token)
+def login_with_telegram_widget(
+    payload: TelegramWidgetLogin, db: Session = Depends(get_db)
+) -> Token:
+    """Browser / PWA sign-in via the Telegram Login Widget."""
+    telegram_user = _verify(validate_login_widget_data, payload.data)
+    user = get_or_create_telegram_user(db, telegram_user)
+    return _token_for(user)
+
+
+def _verify(validator, payload):
+    """Run a Telegram validator, mapping its failures onto HTTP status codes.
+
+    The distinction that matters to a client: 401 means "these credentials
+    are no good, get fresh ones" (the Mini App can simply re-read initData),
+    while 503 means the SERVER is misconfigured and retrying will not help
+    until an operator sets TELEGRAM_BOT_TOKEN.
+    """
+    try:
+        return validator(payload)
+    except TelegramNotConfiguredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Telegram authentication is not configured on this server",
+        ) from exc
+    except ExpiredInitDataError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Telegram session has expired, please reopen the app",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+    except TelegramAuthError as exc:
+        # Covers a bad signature and every malformed-payload case. The
+        # message is deliberately the same for all of them: telling a caller
+        # WHICH part of a forged payload failed just helps them forge better.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Telegram credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
+
+def _token_for(user: User) -> Token:
+    if not user.is_active:
+        # A deactivated account keeps its Telegram link, so sign-in would
+        # otherwise hand out a working token for a banned user.
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been deactivated",
+        )
+    return Token(access_token=create_access_token(user.user_id))

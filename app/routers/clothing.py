@@ -193,8 +193,17 @@ def _purchase_item(db: Session, item_id: uuid.UUID, user: User) -> ClothingPurch
     or a ledger row's balance_after disagrees with users.coin_balance.
     """
     # --- Lock the buyer's row: serializes this user's concurrent debits ---
+    # get_current_user already loaded this row into the Session, so without
+    # populate_existing SQLAlchemy hands back that cached instance and the
+    # balance read below is whatever it was at the start of the request —
+    # not what we just locked. The guarded UPDATE further down is what keeps
+    # the money safe either way; this makes the friendly pre-check tell the
+    # truth instead of falling through to it.
     locked_user = db.execute(
-        select(User).where(User.user_id == user.user_id).with_for_update()
+        select(User)
+        .where(User.user_id == user.user_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     ).scalar_one()
 
     # --- Validate the item (no lock needed: price/availability are

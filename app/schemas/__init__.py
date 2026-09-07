@@ -1,5 +1,6 @@
 from .coin import CoinBalance, CoinTransactionRead, QRTransactionReference
 from .token import LoginRequest, Token
+from .telegram import TelegramInitDataLogin, TelegramWidgetLogin
 from .user import FollowStatus, UserPublic, UserRead, UserRegister, UserUpdate
 from .admin import AdminUserRead
 from .admin_qr import (
@@ -29,6 +30,8 @@ __all__ = [
     "CoinTransactionRead",
     "LoginRequest",
     "Token",
+    "TelegramInitDataLogin",
+    "TelegramWidgetLogin",
     "FollowStatus",
     "QRTransactionReference",
     "UserPublic",

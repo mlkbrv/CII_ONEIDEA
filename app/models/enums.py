@@ -14,6 +14,10 @@ class AuthProviderType(str, enum.Enum):
     LOCAL = "local"
     GOOGLE = "google"
     APPLE = "apple"
+    # Telegram is the Cola Fest MVP's primary identity: the Mini App proves
+    # who the user is with signed initData, so most accounts have no
+    # password at all (users.password_hash stays NULL for them).
+    TELEGRAM = "telegram"
 
 
 class DevicePlatform(str, enum.Enum):

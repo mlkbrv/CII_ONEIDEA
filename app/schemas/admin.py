@@ -15,5 +15,7 @@ class AdminUserRead(BaseModel):
 
     user_id: uuid.UUID
     username: str
-    email: str
+    # Optional since Telegram accounts: a Mini App session never carries an
+    # email address, so this is null for every Telegram-only user.
+    email: str | None = None
     is_admin: bool
