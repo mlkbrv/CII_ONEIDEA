@@ -42,7 +42,7 @@ naive UTC to match that convention; treat all stored timestamps as UTC.
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -65,12 +65,31 @@ def redeem_code(
     return _redeem_qr(db, payload.code, current_user)
 
 
+def normalise_code(code: str) -> str:
+    """Fold the ways a human types a code off a bottle cap into one form.
+
+    People add spaces, type in lowercase, or paste with a trailing newline.
+    None of that should be the difference between winning coins and being
+    told the code does not exist, so whitespace goes and the rest is
+    uppercased. Nothing else is stripped: hyphens and the like may be part
+    of the printed code, and silently deleting them would match the WRONG
+    code rather than none.
+    """
+    return "".join(code.split()).upper()
+
+
 def _redeem_qr(db: Session, code: str, user: User) -> QRCodeRedemptionResult:
     # SELECT ... FOR UPDATE takes an exclusive row lock on the qr_codes row.
     # A concurrent redemption of the same code blocks here until this
     # transaction commits or rolls back, then re-reads the committed row.
+    #
+    # Matching on upper(code) is what makes typing case-insensitive. The
+    # ix_qr_codes_code_upper functional index added alongside this makes it an
+    # index lookup rather than a scan of every code printed for the fest.
     qr = db.execute(
-        select(QRCode).where(QRCode.code == code).with_for_update()
+        select(QRCode)
+        .where(func.upper(QRCode.code) == normalise_code(code))
+        .with_for_update()
     ).scalar_one_or_none()
 
     if qr is None:

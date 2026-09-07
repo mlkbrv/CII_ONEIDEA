@@ -74,6 +74,7 @@ from app.core.database import get_db
 from app.dependencies import get_current_user
 from app.models import Avatar, AvatarEquipment, AvatarSlot, ClothingItem, User, UserWardrobe
 from app.schemas.clothing import ClothingCategoryRef, ClothingItemRead
+from app.services.profiles import load_wardrobe
 from app.schemas.wardrobe import (
     EquipResult,
     EquipmentRead,
@@ -101,33 +102,10 @@ def list_my_wardrobe(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> WardrobeList:
-    # The owner filter uses ONLY the JWT-derived id; there is no other
-    # input this query accepts, so cross-user reads are impossible.
-    owner_id = current_user.user_id
-
-    total = db.execute(
-        select(func.count(UserWardrobe.wardrobe_id)).where(
-            UserWardrobe.user_id == owner_id
-        )
-    ).scalar_one()
-
-    rows = db.execute(
-        select(UserWardrobe)
-        .where(UserWardrobe.user_id == owner_id)
-        .options(
-            joinedload(UserWardrobe.item).joinedload(ClothingItem.category)
-        )
-        .order_by(UserWardrobe.purchased_at.desc(), UserWardrobe.wardrobe_id.desc())
-        .limit(limit)
-        .offset(offset)
-    ).scalars().all()
-
-    return WardrobeList(
-        items=[_to_entry_read(entry) for entry in rows],
-        total=total,
-        limit=limit,
-        offset=offset,
-    )
+    # The owner filter uses ONLY the JWT-derived id; this endpoint accepts no
+    # other input. The same loader serves GET /users/{id}/wardrobe, which
+    # takes its subject from the URL and checks users.wardrobe_public first.
+    return load_wardrobe(db, current_user.user_id, limit=limit, offset=offset)
 
 
 @router.post("/{wardrobe_id}/equip", response_model=EquipResult)

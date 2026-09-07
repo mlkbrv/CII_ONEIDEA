@@ -201,7 +201,9 @@ try:
     r = get_comp(TOKEN_A, comp_id)
     text = str(r.json())
     allowed = {"competition_id", "request_id", "challenger", "opponent", "status", "prize_pool",
-               "total_votes", "winner_id", "duration_minutes", "start_time", "end_time", "created_at"}
+               "total_votes", "challenger_votes", "opponent_votes",
+               "challenger_avatar", "opponent_avatar", "my_vote_for",
+               "winner_id", "duration_minutes", "start_time", "end_time", "created_at"}
     user_allowed = {"user_id", "username", "profile_picture_url", "biography"}
     extra = set(r.json().keys()) - allowed
     extra |= set(r.json()["challenger"].keys()) - user_allowed
@@ -219,9 +221,12 @@ try:
     r = client.get(f"/competitions/{comp_id}")
     results.append(("unauthenticated retrieve -> 401", r.status_code == 401, str(r.status_code)))
 
-    # --- 19. Non-participant -> 403 ---------------------------------------------------------
+    # --- 19. Non-participant can read the battle ---------------------------------------------
+    # A battle is a public contest: /competitions/discover offers other
+    # people's battles so the caller can open one and vote on it, which was
+    # impossible while this returned 403.
     r = get_comp(TOKEN_C, comp_id)
-    results.append(("non-participant retrieve -> 403", r.status_code == 403, str(r.status_code)))
+    results.append(("non-participant retrieve -> 200", r.status_code == 200, str(r.status_code)))
 
     # --- 15/16/17. Authorization on acceptance -----------------------------------------------
     authz_req = send_request(TOKEN_A, B_ID, 30)

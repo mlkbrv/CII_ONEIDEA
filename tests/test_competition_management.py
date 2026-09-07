@@ -283,10 +283,37 @@ try:
     r = client.get("/competitions")
     results.append(("unauthenticated list -> 401", r.status_code == 401, str(r.status_code)))
 
-    # --- Phase 5: detail remains participant-scoped ------------------------------------------
+    # --- Detail is readable by any signed-in user --------------------------------------------
+    # It used to be participant-only, which contradicted /competitions/discover:
+    # that feed exists to offer OTHER people's battles so the caller can open
+    # one and vote, and every such open returned 403. A battle is a public
+    # contest between two public profiles, so the detail is public too.
     results.append(("challenger can retrieve competition -> 200", get_comp(TOKENS["A"], c1_comp).status_code == 200, ""))
     results.append(("opponent can retrieve competition -> 200", get_comp(TOKENS["B"], c1_comp).status_code == 200, ""))
-    results.append(("non-participant retrieve -> 403", get_comp(TOKENS["E"], c1_comp).status_code == 403, ""))
+    r = get_comp(TOKENS["E"], c1_comp)
+    results.append(("non-participant can retrieve competition -> 200", r.status_code == 200, str(r.status_code)))
+    body = r.json() if r.status_code == 200 else {}
+    results.append((
+        "detail carries the per-participant score",
+        "challenger_votes" in body and "opponent_votes" in body,
+        f"challenger={body.get('challenger_votes')}, opponent={body.get('opponent_votes')}",
+    ))
+    results.append((
+        "detail carries both outfits for the battle screen",
+        "challenger_avatar" in body and "opponent_avatar" in body,
+        "",
+    ))
+    results.append((
+        "a non-voter's own vote reads as null",
+        body.get("my_vote_for") is None,
+        str(body.get("my_vote_for")),
+    ))
+    results.append((
+        "detail exposes no account fields",
+        not any(k in str(body) for k in ("password_hash", "coin_balance", "telegram_id")),
+        "",
+    ))
+    results.append(("unauthenticated retrieve -> 401", client.get(f"/competitions/{c1_comp}").status_code == 401, ""))
     r = client.get(f"/competitions/{c1_comp}")
     results.append(("unauthenticated detail -> 401", r.status_code == 401, str(r.status_code)))
 

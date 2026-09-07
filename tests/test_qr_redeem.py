@@ -52,6 +52,8 @@ CODE_REDEEMED = f"COLA-{RUN_ID}-REDEEMED"
 CODE_EXPIRED = f"COLA-{RUN_ID}-EXPIRED"
 CODE_OVERDUE = f"COLA-{RUN_ID}-OVERDUE"
 CODE_NONEXISTENT = f"COLA-{RUN_ID}-NOPE"
+# Redeemed by typing it back the way a person actually would.
+CODE_TYPO = f"COLA-{RUN_ID}-TYPO"
 
 VALID_COIN_VALUE = 10
 
@@ -138,13 +140,15 @@ with SessionLocal() as db:
                    redeemed_by_user_id=uuid.UUID(user_id), redeemed_at=past),
             QRCode(code=CODE_EXPIRED, product_id=product.product_id,
                    coin_value=5, status=QRStatus.EXPIRED, expires_at=past),
+            QRCode(code=CODE_TYPO, product_id=product.product_id,
+                   coin_value=VALID_COIN_VALUE),
             QRCode(code=CODE_OVERDUE, product_id=product.product_id,
                    coin_value=7, status=QRStatus.ACTIVE, expires_at=past),
         ]
     )
     db.commit()
 
-created_codes = [CODE_VALID, CODE_REDEEMED, CODE_EXPIRED, CODE_OVERDUE]
+created_codes = [CODE_VALID, CODE_REDEEMED, CODE_EXPIRED, CODE_OVERDUE, CODE_TYPO]
 
 response = client.post("/auth/login", json={"username": USERNAME, "password": PASSWORD})
 token = response.json().get("access_token", "")
@@ -252,6 +256,26 @@ results.append(
     ("redemption credits coin_balance by coin_value and writes ONE ledger row",
      ok, f"coin={user.coin_balance} txs={tx_after}")
 )
+
+# --- Codes are typed by hand off a bottle cap ------------------------------
+# Case and stray spaces must not be the difference between winning coins and
+# being told the code does not exist.
+response = redeem(f"  {CODE_TYPO.lower()} ", headers=AUTH)
+results.append((
+    "a lowercase code with stray spaces still redeems",
+    response.status_code == 200,
+    str(response.status_code),
+))
+results.append((
+    "and it is then spent, whatever case it is retyped in",
+    redeem(CODE_TYPO, headers=AUTH).status_code == 409,
+    "",
+))
+results.append((
+    "normalising does not make a different code match",
+    redeem(f"{CODE_TYPO}X", headers=AUTH).status_code == 404,
+    "",
+))
 
 try:
     failed = 0

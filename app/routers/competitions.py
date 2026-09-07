@@ -39,9 +39,14 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
 from app.dependencies import get_current_user
-from app.models import Competition, User
-from app.schemas.competition import CompetitionDiscoverResult, CompetitionRead
+from app.models import Competition, Follow, User, Vote
+from app.schemas.competition import (
+    CompetitionDetail,
+    CompetitionDiscoverResult,
+    CompetitionRead,
+)
 from app.schemas.user import UserPublic
+from app.services.profiles import load_avatar
 from app.services.competition_expiration import (
     CompletionOutcome,
     complete_expired_competition,
@@ -106,11 +111,23 @@ def list_competitions(
         )
 
     rows = db.execute(query.limit(limit).offset(offset)).scalars().all()
-    return [_to_competition_read(c) for c in rows]
+    breakdown = _vote_breakdown(db, [c.competition_id for c in rows])
+    return [_to_competition_read(c, breakdown) for c in rows]
+
+
+CompetitionScope = Literal["all", "following"]
 
 
 @router.get("/discover", response_model=CompetitionDiscoverResult)
 def discover_competitions(
+    scope: CompetitionScope = Query(
+        default="all",
+        description=(
+            "'following' limits the feed to battles involving people the "
+            "caller follows (the 'Other battles' tab); 'all' shows every "
+            "active battle between other users."
+        ),
+    ),
     limit: int = Query(
         default=20,
         ge=1,
@@ -141,6 +158,20 @@ def discover_competitions(
         Competition.opponent.has(User.is_active.is_(True)),
     ]
 
+    if scope == "following":
+        # TZ section 14: the "Other competitions" tab shows battles from the
+        # caller's social network. Deliberately no recommendation algorithm —
+        # a battle qualifies if EITHER side is someone the caller follows.
+        followees = select(Follow.followee_id).where(
+            Follow.follower_id == current_user.user_id
+        )
+        conditions.append(
+            or_(
+                Competition.challenger_id.in_(followees),
+                Competition.opponent_id.in_(followees),
+            )
+        )
+
     total = db.scalar(select(func.count()).select_from(Competition).where(*conditions))
     rows = db.execute(
         select(Competition)
@@ -157,20 +188,21 @@ def discover_competitions(
         .offset(offset)
     ).scalars().all()
 
+    breakdown = _vote_breakdown(db, [c.competition_id for c in rows])
     return CompetitionDiscoverResult(
-        items=[_to_competition_read(c) for c in rows],
+        items=[_to_competition_read(c, breakdown) for c in rows],
         total=total,
         limit=limit,
         offset=offset,
     )
 
 
-@router.get("/{competition_id}", response_model=CompetitionRead)
+@router.get("/{competition_id}", response_model=CompetitionDetail)
 def get_competition(
     competition_id: uuid.UUID,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> CompetitionRead:
+) -> CompetitionDetail:
     competition = db.execute(
         select(Competition)
         .where(Competition.competition_id == competition_id)
@@ -186,18 +218,29 @@ def get_competition(
             detail="Competition not found",
         )
 
-    # Private to the participants only. The participant check reads the two FK
-    # columns, not the joined users, so it cannot be influenced by client input.
-    if (
-        competition.challenger_id != current_user.user_id
-        and competition.opponent_id != current_user.user_id
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You are not a participant of this competition",
-        )
+    # Viewable by any authenticated user, not just the participants. That is
+    # the whole point of a public outfit battle: /competitions/discover offers
+    # other people's battles precisely so the caller can open one and vote on
+    # it, and voting requires seeing the two outfits first. Restricting this to
+    # participants made the discover feed lead to a 403. Nothing private is
+    # exposed — both participants are already public profiles, and the score is
+    # what the battle is for.
+    breakdown = _vote_breakdown(db, [competition.competition_id])
+    base = _to_competition_read(competition, breakdown)
 
-    return _to_competition_read(competition)
+    my_vote_for = db.execute(
+        select(Vote.voted_for_user_id).where(
+            Vote.competition_id == competition_id,
+            Vote.voter_id == current_user.user_id,
+        )
+    ).scalar_one_or_none()
+
+    return CompetitionDetail(
+        **base.model_dump(),
+        challenger_avatar=load_avatar(db, competition.challenger_id),
+        opponent_avatar=load_avatar(db, competition.opponent_id),
+        my_vote_for=my_vote_for,
+    )
 
 
 @router.post("/{competition_id}/complete", response_model=CompetitionRead)
@@ -262,7 +305,36 @@ def complete_competition(
     return _to_competition_read(completed)
 
 
-def _to_competition_read(competition: Competition) -> CompetitionRead:
+def _vote_breakdown(
+    db: Session, competition_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, dict[uuid.UUID, int]]:
+    """Votes per participant, for a whole page of competitions at once.
+
+    One grouped query for the page rather than two per competition: a list of
+    20 battles would otherwise cost 40 extra round trips to render 40 numbers.
+    Returns {competition_id: {voted_for_user_id: count}}; a competition with
+    no votes is simply absent, and callers treat a miss as zero.
+    """
+    if not competition_ids:
+        return {}
+
+    rows = db.execute(
+        select(Vote.competition_id, Vote.voted_for_user_id, func.count())
+        .where(Vote.competition_id.in_(competition_ids))
+        .group_by(Vote.competition_id, Vote.voted_for_user_id)
+    ).all()
+
+    breakdown: dict[uuid.UUID, dict[uuid.UUID, int]] = {}
+    for competition_id, voted_for, count in rows:
+        breakdown.setdefault(competition_id, {})[voted_for] = count
+    return breakdown
+
+
+def _to_competition_read(
+    competition: Competition,
+    breakdown: dict[uuid.UUID, dict[uuid.UUID, int]] | None = None,
+) -> CompetitionRead:
+    scores = (breakdown or {}).get(competition.competition_id, {})
     return CompetitionRead(
         competition_id=competition.competition_id,
         request_id=competition.request_id,
@@ -271,6 +343,8 @@ def _to_competition_read(competition: Competition) -> CompetitionRead:
         status=competition.status.status_name,
         prize_pool=competition.prize_pool,
         total_votes=competition.total_votes,
+        challenger_votes=scores.get(competition.challenger_id, 0),
+        opponent_votes=scores.get(competition.opponent_id, 0),
         winner_id=competition.winner_id,
         duration_minutes=competition.duration_minutes,
         start_time=competition.start_time,

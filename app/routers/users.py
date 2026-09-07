@@ -58,15 +58,24 @@ query and add pg_trgm later if search becomes a bottleneck.
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload, selectinload
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
 from app.dependencies import get_current_user
 from app.models import CoinTransaction, Follow, QRCode, User
+from app.schemas.avatar import AvatarRead
 from app.schemas.coin import CoinBalance, CoinTransactionRead, QRTransactionReference
+from app.schemas.profile import FollowList, FollowUser, PublicProfile
 from app.schemas.user import FollowStatus, UserPublic, UserRead, UserUpdate
+from app.schemas.wardrobe import WardrobeList
+from app.services.profiles import (
+    active_competition_id,
+    follow_counts,
+    load_avatar,
+    load_wardrobe,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -329,4 +338,206 @@ def _already_following() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail="You are already following this user",
+    )
+
+# --- Looking at other people ----------------------------------------------
+# Everything below takes its subject from the URL rather than the JWT, which
+# is the whole point: TZ sections 8 and 9 are about finding someone, opening
+# their profile, seeing their outfit and challenging them. The caller's own
+# identity still comes only from the token, and is used for exactly two
+# things — the follow-button state, and whether a private wardrobe may open.
+#
+# Route order matters. FastAPI matches in declaration order, so /users/me and
+# /users/search above win over /users/{user_id}; declaring these at the END
+# of the module is what stops "me" from being parsed as a UUID.
+
+
+@router.get("/{user_id}", response_model=PublicProfile)
+def get_public_profile(
+    user_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PublicProfile:
+    """One screen's worth of someone's profile: outfit, counts, live battle."""
+    user = _active_user_or_404(db, user_id)
+    followers_count, following_count = follow_counts(db, user_id)
+    is_self = user_id == current_user.user_id
+
+    return PublicProfile(
+        user_id=user.user_id,
+        username=user.username,
+        biography=user.biography,
+        profile_picture_url=user.profile_picture_url,
+        winning_streak=user.winning_streak,
+        followers_count=followers_count,
+        following_count=following_count,
+        is_following=(
+            False
+            if is_self
+            else db.get(Follow, (current_user.user_id, user_id)) is not None
+        ),
+        is_self=is_self,
+        avatar=load_avatar(db, user_id),
+        wardrobe_public=user.wardrobe_public,
+        active_competition_id=active_competition_id(db, user_id),
+    )
+
+
+@router.get("/{user_id}/followers", response_model=FollowList)
+def list_followers(
+    user_id: uuid.UUID,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FollowList:
+    """Who follows this user."""
+    _active_user_or_404(db, user_id)
+    return _follow_page(
+        db,
+        current_user,
+        subject_column=Follow.followee_id,
+        other_column=Follow.follower_id,
+        user_id=user_id,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/{user_id}/following", response_model=FollowList)
+def list_following(
+    user_id: uuid.UUID,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> FollowList:
+    """Who this user follows."""
+    _active_user_or_404(db, user_id)
+    return _follow_page(
+        db,
+        current_user,
+        subject_column=Follow.follower_id,
+        other_column=Follow.followee_id,
+        user_id=user_id,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/{user_id}/avatar", response_model=AvatarRead)
+def get_user_avatar(
+    user_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> AvatarRead:
+    """Someone else's outfit — what a battle card or a profile renders.
+
+    Always public: the outfit IS the thing being shown off and voted on.
+    """
+    _active_user_or_404(db, user_id)
+    avatar = load_avatar(db, user_id)
+    if avatar is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Avatar not found",
+        )
+    return avatar
+
+
+@router.get("/{user_id}/wardrobe", response_model=WardrobeList)
+def get_user_wardrobe(
+    user_id: uuid.UUID,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> WardrobeList:
+    """Someone else's wardrobe, if they allow it (TZ section 8).
+
+    Unlike the outfit, a wardrobe is everything they own — closer to a balance
+    sheet than to a look — so it is gated on users.wardrobe_public. The owner
+    always reads their own, whatever the flag says.
+    """
+    user = _active_user_or_404(db, user_id)
+    if user_id != current_user.user_id and not user.wardrobe_public:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This user's wardrobe is private",
+        )
+    return load_wardrobe(db, user_id, limit=limit, offset=offset)
+
+
+def _active_user_or_404(db: Session, user_id: uuid.UUID) -> User:
+    """Load a user for public display, or 404.
+
+    A deactivated account is reported as missing rather than as deactivated:
+    whether a given id was ever banned is not the public's business, and the
+    two cases are indistinguishable to a caller either way.
+    """
+    user = db.get(User, user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    return user
+
+
+def _follow_page(
+    db: Session,
+    current_user: User,
+    subject_column,
+    other_column,
+    user_id: uuid.UUID,
+    limit: int,
+    offset: int,
+) -> FollowList:
+    """One page of a follow list.
+
+    Followers and following are the same query with the two Follow columns
+    swapped, so they share one implementation instead of diverging over time.
+    """
+    total = db.execute(
+        select(func.count()).select_from(Follow).where(subject_column == user_id)
+    ).scalar_one()
+
+    rows = db.execute(
+        select(User)
+        .join(Follow, other_column == User.user_id)
+        .where(subject_column == user_id, User.is_active.is_(True))
+        .order_by(User.username)
+        .limit(limit)
+        .offset(offset)
+    ).scalars().all()
+
+    # One query for "which of these do I already follow", rather than one per
+    # row: a 100-entry follower list would otherwise cost 100 extra round trips.
+    listed_ids = [row.user_id for row in rows]
+    followed_by_me: set = set()
+    if listed_ids:
+        followed_by_me = set(
+            db.execute(
+                select(Follow.followee_id).where(
+                    Follow.follower_id == current_user.user_id,
+                    Follow.followee_id.in_(listed_ids),
+                )
+            ).scalars().all()
+        )
+
+    return FollowList(
+        items=[
+            FollowUser(
+                user_id=row.user_id,
+                username=row.username,
+                profile_picture_url=row.profile_picture_url,
+                biography=row.biography,
+                winning_streak=row.winning_streak,
+                is_following=row.user_id in followed_by_me,
+            )
+            for row in rows
+        ],
+        total=total,
+        limit=limit,
+        offset=offset,
     )

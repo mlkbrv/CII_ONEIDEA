@@ -222,7 +222,8 @@ try:
     for item in body["items"]:
         leaks |= set(item.keys()) - {
             "competition_id", "request_id", "challenger", "opponent", "status", "prize_pool",
-            "total_votes", "winner_id", "duration_minutes", "start_time", "end_time", "created_at",
+            "total_votes", "challenger_votes", "opponent_votes",
+            "winner_id", "duration_minutes", "start_time", "end_time", "created_at",
         }
         leaks |= set(item["challenger"].keys()) - user_allowed
         leaks |= set(item["opponent"].keys()) - user_allowed

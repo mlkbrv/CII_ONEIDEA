@@ -48,20 +48,13 @@ Design notes
   coin_balance or the ledger.
 """
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.dependencies import get_current_user
-from app.models import (
-    Avatar,
-    AvatarEquipment,
-    AvatarSlot,
-    ClothingItem,
-    User,
-)
-from app.schemas.avatar import AvatarEquipmentMap, AvatarRead, AvatarSlotEquipment
-from app.schemas.clothing import ClothingCategoryRef, ClothingItemRead
+from app.models import User
+from app.schemas.avatar import AvatarRead
+from app.services.profiles import load_avatar
 
 router = APIRouter(prefix="/avatar", tags=["avatar"])
 
@@ -71,54 +64,13 @@ def get_my_avatar(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> AvatarRead:
-    # The owner filter uses ONLY the JWT-derived id; there is no other
-    # input this query accepts, so cross-user reads are impossible.
-    avatar = db.execute(
-        select(Avatar)
-        .where(Avatar.user_id == current_user.user_id)
-        .options(
-            joinedload(Avatar.equipment)
-            .joinedload(AvatarEquipment.item)
-            .joinedload(ClothingItem.category)
-        )
-    ).unique().scalar_one_or_none()
+    # The owner filter uses ONLY the JWT-derived id; this endpoint accepts no
+    # other input, so cross-user reads are impossible here. The same loader
+    # serves GET /users/{id}/avatar, which takes its subject from the URL.
+    avatar = load_avatar(db, current_user.user_id)
     if avatar is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Avatar not found",
         )
-
-    # Fold the equipment rows into the slot-keyed map. Empty slots keep
-    # their schema default (None); an item-less equipment row (possible
-    # at the schema level, never written by the equip flow) counts as
-    # empty as well.
-    occupied: dict[str, AvatarSlotEquipment] = {}
-    for entry in avatar.equipment:
-        if entry.item is None:
-            continue
-        occupied[entry.slot.value] = AvatarSlotEquipment(
-            equipped_at=entry.equipped_at,
-            item=_to_item_read(entry.item),
-        )
-
-    return AvatarRead(
-        avatar_id=avatar.avatar_id,
-        equipment=AvatarEquipmentMap(**occupied),
-    )
-
-
-def _to_item_read(item: ClothingItem) -> ClothingItemRead:
-    return ClothingItemRead(
-        item_id=item.item_id,
-        name=item.name,
-        description=item.description,
-        category=ClothingCategoryRef(
-            category_id=item.category.category_id,
-            category_name=item.category.category_name,
-            slot=item.category.slot,
-        ),
-        price=item.price,
-        image_url=item.image_url,
-        availability_status=item.availability_status,
-        collection_id=item.collection_id,
-    )
+    return avatar

@@ -12,6 +12,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.schemas.avatar import AvatarRead
 from app.schemas.user import UserPublic
 
 
@@ -23,11 +24,37 @@ class CompetitionRead(BaseModel):
     status: str
     prize_pool: int
     total_votes: int
+
+    # The score, split per participant. total_votes alone cannot render a
+    # battle card: "123 votes" says nothing about who is winning, and the
+    # whole screen is "Uzeir 72 VS 51 Ali". Counted from the votes table
+    # rather than stored, so it can never drift from the rows that decide
+    # the winner at completion time.
+    challenger_votes: int = 0
+    opponent_votes: int = 0
+
     winner_id: UUID | None = None
     duration_minutes: int
     start_time: datetime
     end_time: datetime
     created_at: datetime
+
+
+class CompetitionDetail(CompetitionRead):
+    """Response of GET /competitions/{id} — everything the battle screen needs.
+
+    Adds the two outfits to the list shape, because the battle screen IS the
+    two avatars side by side, and the caller's own vote so the UI can show
+    which side they backed instead of offering to charge them a second coin.
+    """
+
+    challenger_avatar: AvatarRead | None = None
+    opponent_avatar: AvatarRead | None = None
+
+    # Who the caller voted for in this battle, or null if they have not voted.
+    # One vote per user per competition is enforced by a UNIQUE constraint, so
+    # this is single-valued by construction.
+    my_vote_for: UUID | None = None
 
 
 class CompetitionDiscoverResult(BaseModel):
