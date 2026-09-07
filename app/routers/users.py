@@ -70,6 +70,7 @@ from app.schemas.coin import CoinBalance, CoinTransactionRead, QRTransactionRefe
 from app.schemas.profile import FollowList, FollowUser, PublicProfile
 from app.schemas.user import FollowStatus, UserPublic, UserRead, UserUpdate
 from app.schemas.wardrobe import WardrobeList
+from app.services.notifications import NEW_FOLLOWER, create_notification
 from app.services.profiles import (
     active_competition_id,
     follow_counts,
@@ -289,6 +290,12 @@ def follow_user(
         raise _already_following()
 
     db.add(Follow(follower_id=current_user.user_id, followee_id=user_id))
+    create_notification(
+        db,
+        user_id=user_id,
+        type_name=NEW_FOLLOWER,
+        actor=current_user,
+    )
     try:
         db.commit()
     except IntegrityError as exc:

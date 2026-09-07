@@ -57,6 +57,13 @@ class Notification(Base):
     # `metadata`, matching the design doc, via the explicit name= below.
     payload: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True)
     is_read: Mapped[bool] = mapped_column(nullable=False, server_default=text("false"))
+
+    # When this notification was pushed to Telegram, or NULL if it still has
+    # to be. The API only ever writes the row; a separate worker delivers it
+    # and stamps this. That split is what makes delivery survive a restart or
+    # a Telegram outage — see the migration for why it is not sent inline.
+    delivered_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(server_default=text("now()"), nullable=False)
 
     user: Mapped["User"] = relationship(

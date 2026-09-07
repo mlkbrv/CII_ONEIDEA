@@ -22,6 +22,7 @@ from .wardrobe import (
     WardrobeList,
 )
 from .avatar import AvatarEquipmentMap, AvatarRead, AvatarSlotEquipment
+from .notification import NotificationList, NotificationRead, UnreadCount
 from .profile import FollowList, FollowUser, Leaderboard, LeaderboardEntry, PublicProfile
 from .competition import CompetitionDetail, CompetitionDiscoverResult, CompetitionRead
 from .vote import VoteCreate, VoteRead
@@ -65,6 +66,9 @@ __all__ = [
     "AvatarRead",
     "AvatarSlotEquipment",
     "AvatarEquipmentMap",
+    "NotificationList",
+    "NotificationRead",
+    "UnreadCount",
     "FollowList",
     "FollowUser",
     "Leaderboard",

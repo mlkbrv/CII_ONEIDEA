@@ -15,6 +15,7 @@ from app.routers import (
     competition_requests_router,
     competitions_router,
     leaderboard_router,
+    notifications_router,
     qr_router,
     users_router,
     votes_router,
@@ -24,14 +25,18 @@ from app.routers import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Owns the background competition-expiration sweeper.
+    """Optionally owns the competition-expiration sweeper.
 
-    A daemon thread periodically sweeps expired ACTIVE competitions and
-    finalizes them (winner/draw + status -> completed) using the shared
-    competition_expiration service. No Redis/Celery — just a PostgreSQL-backed
-    loop at ~200-user scale. The TestClient-based test suite does not start
-    FastAPI lifespans, so tests drive sweep_expired_competitions directly.
+    The sweeper, the reminder sweep and the Telegram bot normally live in the
+    worker process (`python -m app.worker`), because each must run exactly
+    once and the API may run several uvicorn workers. RUN_SWEEPER=true brings
+    it back in-process for a single-process development run where starting a
+    second container is not worth it.
     """
+    if not settings.run_sweeper:
+        yield
+        return
+
     from app.services.competition_expiration import run_expiration_sweeper
 
     stop_event = threading.Event()
@@ -60,6 +65,7 @@ app.include_router(competition_requests_router)
 app.include_router(competitions_router)
 app.include_router(votes_router)
 app.include_router(leaderboard_router)
+app.include_router(notifications_router)
 app.include_router(admin_router)
 
 

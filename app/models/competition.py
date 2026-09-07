@@ -71,6 +71,12 @@ class Competition(Base):
         UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="RESTRICT"), nullable=True
     )
     duration_minutes: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+
+    # When the "ending soon" reminder went out, or NULL if it has not. The
+    # reminder must fire exactly once per battle; storing the fact makes the
+    # worker's sweep a plain WHERE clause and double-sending impossible.
+    reminder_sent_at: Mapped[datetime | None] = mapped_column(nullable=True)
+
     start_time: Mapped[datetime] = mapped_column(nullable=False)
     end_time: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

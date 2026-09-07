@@ -62,7 +62,7 @@ def redeem_code(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> QRCodeRedemptionResult:
-    return _redeem_qr(db, payload.code, current_user)
+    return redeem_qr(db, payload.code, current_user)
 
 
 def normalise_code(code: str) -> str:
@@ -78,7 +78,12 @@ def normalise_code(code: str) -> str:
     return "".join(code.split()).upper()
 
 
-def _redeem_qr(db: Session, code: str, user: User) -> QRCodeRedemptionResult:
+def redeem_qr(db: Session, code: str, user: User) -> QRCodeRedemptionResult:
+    """The shared redemption transaction, used by the endpoint above and by
+    the bot's /redeem command. Public on purpose: a second implementation
+    for chat would eventually disagree with this one about which codes are
+    valid, and this is the transaction that moves coins.
+    """
     # SELECT ... FOR UPDATE takes an exclusive row lock on the qr_codes row.
     # A concurrent redemption of the same code blocks here until this
     # transaction commits or rolls back, then re-reads the committed row.

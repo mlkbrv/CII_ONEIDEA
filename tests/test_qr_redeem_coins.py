@@ -20,7 +20,7 @@ test_qr_redeem.py skims the coin side; this file verifies it in depth:
     one awards the coins.
 
 The DB-layer concurrency attempt uses the same function the endpoint runs
-(_redeem_qr) directly, so the two attempts genuinely block on the row lock
+(redeem_qr) directly, so the two attempts genuinely block on the row lock
 instead of being serialized by the test client.
 
 Test products, qr_codes, users, and their coin_transactions are deleted
@@ -46,7 +46,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.main import app
 from app.models import QRCode, QRStatus, CoinTransaction, CoinTransactionType, Product, User
-from app.routers.qr import _redeem_qr
+from app.routers.qr import redeem_qr
 
 client = TestClient(app)
 
@@ -341,7 +341,7 @@ def db_worker() -> None:
     with SessionLocal() as db:
         user = db.get(User, uuid.UUID(USER_ID))
         try:
-            _redeem_qr(db, CODE_RACE, user)
+            redeem_qr(db, CODE_RACE, user)
             db_outcomes.append(200)
         except HTTPException as exc:
             db_outcomes.append(exc.status_code)

@@ -35,6 +35,12 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.services.notifications import (
+    COMPETITION_DRAW,
+    COMPETITION_LOST,
+    COMPETITION_WON,
+    create_notification,
+)
 from app.models import CoinTransaction, CoinTransactionType, Competition, CompetitionStatus, User, Vote
 
 logger = logging.getLogger(__name__)
@@ -147,9 +153,83 @@ def complete_expired_competition(
     competition.status_id = completed_id
     competition.winner_id = winner_id
     _distribute_prize(db, competition)
+    streaks = _apply_winning_streaks(db, competition)
+    _announce_result(db, competition, streaks)
     db.commit()
 
     return CompletionOutcome.COMPLETED, competition
+
+
+def _apply_winning_streaks(
+    db: Session, competition: Competition
+) -> dict[uuid.UUID, int]:
+    """Winner's streak +1, loser's back to 0 (TZ section 13).
+
+    A draw leaves both streaks alone: nobody lost, so resetting would punish
+    a player for a tie, and incrementing would reward one for not winning.
+    The TZ only defines the win and loss cases.
+
+    Written as guarded atomic UPDATEs in the completion transaction, so the
+    streak can never disagree with the winner_id that was just decided.
+    Returns the new streak per user, for the result notification to quote.
+    """
+    if competition.winner_id is None:
+        return {}
+
+    loser_id = (
+        competition.opponent_id
+        if competition.winner_id == competition.challenger_id
+        else competition.challenger_id
+    )
+
+    new_streak = db.execute(
+        update(User)
+        .where(User.user_id == competition.winner_id)
+        .values(winning_streak=User.winning_streak + 1)
+        .returning(User.winning_streak)
+    ).scalar_one()
+
+    db.execute(
+        update(User).where(User.user_id == loser_id).values(winning_streak=0)
+    )
+
+    return {competition.winner_id: new_streak, loser_id: 0}
+
+
+def _announce_result(
+    db: Session, competition: Competition, streaks: dict[uuid.UUID, int]
+) -> None:
+    """Tell both participants how it ended.
+
+    Staged in the completion transaction, so a rolled-back completion never
+    leaves someone told they won a battle that was not finalised.
+    """
+    payload = {
+        "competition_id": str(competition.competition_id),
+        "prize_pool": competition.prize_pool,
+    }
+
+    if competition.winner_id is None:
+        for user_id in (competition.challenger_id, competition.opponent_id):
+            create_notification(
+                db, user_id=user_id, type_name=COMPETITION_DRAW, payload=payload
+            )
+        return
+
+    loser_id = (
+        competition.opponent_id
+        if competition.winner_id == competition.challenger_id
+        else competition.challenger_id
+    )
+    create_notification(
+        db,
+        user_id=competition.winner_id,
+        type_name=COMPETITION_WON,
+        payload={**payload, "winning_streak": streaks.get(competition.winner_id)},
+    )
+    create_notification(
+        db, user_id=loser_id, type_name=COMPETITION_LOST, payload=payload
+    )
 
 
 def _distribute_prize(db: Session, competition: Competition) -> None:

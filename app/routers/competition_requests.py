@@ -106,6 +106,12 @@ from app.dependencies import get_current_user
 from app.models import Competition, CompetitionRequest, CompetitionRequestStatus, CompetitionStatus, User
 from app.schemas.competition_request import CompetitionRequestCreate, CompetitionRequestRead
 from app.schemas.user import UserPublic
+from app.services.notifications import (
+    COMPETITION_ACCEPTED,
+    COMPETITION_DECLINED,
+    COMPETITION_REQUEST,
+    create_notification,
+)
 
 router = APIRouter(prefix="/competition-requests", tags=["competition-requests"])
 
@@ -142,6 +148,21 @@ def send_competition_request(
         duration_minutes=payload.duration_minutes,
     )
     db.add(request)
+
+    # Staged in the same transaction as the request itself: if the insert
+    # fails, the opponent is never told about a challenge that does not exist.
+    db.flush()
+    create_notification(
+        db,
+        user_id=payload.opponent_id,
+        type_name=COMPETITION_REQUEST,
+        actor=current_user,
+        payload={
+            "request_id": str(request.request_id),
+            "duration_minutes": request.duration_minutes,
+        },
+    )
+
     db.commit()
     db.refresh(request)
     return _to_request_read(request)
@@ -319,6 +340,20 @@ def _transition_request(
                 start_time=now,
                 status_id=active_status_id,
             )
+        )
+
+    # The challenger started this, so they are the one waiting on an answer.
+    # Staged before the commit below, so a lost race or a constraint failure
+    # takes the notification down with the transition it was announcing.
+    if action in ("accept", "decline"):
+        create_notification(
+            db,
+            user_id=request.challenger_id,
+            type_name=(
+                COMPETITION_ACCEPTED if action == "accept" else COMPETITION_DECLINED
+            ),
+            actor=current_user,
+            payload={"request_id": str(request_id)},
         )
 
     try:
