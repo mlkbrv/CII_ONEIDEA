@@ -1,103 +1,140 @@
+"""
+users — core identity record. Design doc section 2.1.
+
+IMPORTANT: coin_balance is a CACHE, not a source of truth. Once the
+coin_transactions ledger exists (a later batch), nothing should ever
+write to coin_balance directly except the transaction service layer
+that also inserts the corresponding ledger row in the same DB
+transaction. Treat it as read-only from anywhere else in the codebase.
+
+"Profile" fields (username, bio, profile picture, etc.) live directly
+on this table by design — see the discussion in chat: a separate
+`profiles` table isn't warranted unless the field count explodes or
+auth data needs access-control separation from profile data. Neither
+applies here.
+"""
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, UniqueConstraint, false, text
+from sqlalchemy import CheckConstraint, text
+from sqlalchemy.dialects.postgresql import CITEXT, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.models.enums import AuthProviderType, DevicePlatform, str_enum
-from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
-    from app.models.avatar import Avatar
-    from app.models.clothing import EquippedItem, WardrobeItem
-    from app.models.coin import CoinTransaction
-    from app.models.competition import Competition, CompetitionRequest, Vote
-    from app.models.notification import Notification
-    from app.models.product import ProductCode
-    from app.models.promo import PromoCode
-    from app.models.social import UserFollow
+    from .auth_provider import AuthProvider
+    from .avatar import Avatar
+    from .coin_transaction import CoinTransaction
+    from .competition import Competition
+    from .competition_request import CompetitionRequest
+    from .device_token import DeviceToken
+    from .follow import Follow
+    from .notification import Notification
+    from .qr_code import QRCode
+    from .user_wardrobe import UserWardrobe
+    from .vote import Vote
 
 
-class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+class User(Base):
     __tablename__ = "users"
-
-    username: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
-    display_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
-    coins: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
-    winning_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
-    wardrobe_is_public: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default=false()
-    )
-
-    auth_providers: Mapped[list[AuthProvider]] = relationship(back_populates="user")
-    device_tokens: Mapped[list[DeviceToken]] = relationship(back_populates="user")
-    avatar: Mapped[Avatar | None] = relationship(back_populates="user", uselist=False)
-    following: Mapped[list[UserFollow]] = relationship(
-        back_populates="follower",
-        foreign_keys="UserFollow.follower_id",
-    )
-    followers: Mapped[list[UserFollow]] = relationship(
-        back_populates="followee",
-        foreign_keys="UserFollow.followee_id",
-    )
-    coin_transactions: Mapped[list[CoinTransaction]] = relationship(back_populates="user")
-    redeemed_promo_codes: Mapped[list[PromoCode]] = relationship(back_populates="redeemed_by")
-    redeemed_product_codes: Mapped[list[ProductCode]] = relationship(back_populates="redeemed_by")
-    wardrobe_items: Mapped[list[WardrobeItem]] = relationship(back_populates="user")
-    equipped_items: Mapped[list[EquippedItem]] = relationship(back_populates="user")
-    competition_requests_sent: Mapped[list[CompetitionRequest]] = relationship(
-        back_populates="challenger",
-        foreign_keys="CompetitionRequest.challenger_id",
-    )
-    competition_requests_received: Mapped[list[CompetitionRequest]] = relationship(
-        back_populates="opponent",
-        foreign_keys="CompetitionRequest.opponent_id",
-    )
-    competitions_as_challenger: Mapped[list[Competition]] = relationship(
-        back_populates="challenger",
-        foreign_keys="Competition.challenger_id",
-    )
-    competitions_as_opponent: Mapped[list[Competition]] = relationship(
-        back_populates="opponent",
-        foreign_keys="Competition.opponent_id",
-    )
-    competitions_won: Mapped[list[Competition]] = relationship(
-        back_populates="winner",
-        foreign_keys="Competition.winner_id",
-    )
-    votes: Mapped[list[Vote]] = relationship(
-        back_populates="voter",
-        foreign_keys="Vote.voter_id",
-    )
-    notifications: Mapped[list[Notification]] = relationship(back_populates="user")
-
-
-class AuthProvider(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    __tablename__ = "auth_providers"
     __table_args__ = (
-        UniqueConstraint("provider", "provider_user_id", name="uq_auth_providers_provider_user"),
+        CheckConstraint("coin_balance >= 0", name="ck_users_coin_balance_non_negative"),
+        CheckConstraint("winning_streak >= 0", name="ck_users_winning_streak_non_negative"),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
-    provider: Mapped[AuthProviderType] = mapped_column(str_enum(AuthProviderType), nullable=False)
-    provider_user_id: Mapped[str] = mapped_column(String(128), nullable=False)
 
-    user: Mapped[User] = relationship(back_populates="auth_providers")
+    # CITEXT requires `CREATE EXTENSION IF NOT EXISTS citext;` — see design
+    # doc section 2.1 for why (case-insensitive uniqueness on username/email).
+    username: Mapped[str] = mapped_column(CITEXT(), unique=True, nullable=False, index=True)
+    email: Mapped[str] = mapped_column(CITEXT(), unique=True, nullable=False, index=True)
 
+    # Nullable because OAuth-only accounts (future Google/Apple login) have
+    # no local password.
+    password_hash: Mapped[str | None] = mapped_column(nullable=True)
 
-class DeviceToken(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    __tablename__ = "device_tokens"
+    profile_picture_url: Mapped[str | None] = mapped_column(nullable=True)
+    biography: Mapped[str | None] = mapped_column(nullable=True)
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    coin_balance: Mapped[int] = mapped_column(nullable=False, server_default=text("0"))
+    winning_streak: Mapped[int] = mapped_column(nullable=False, server_default=text("0"))
+
+    # Soft delete flag — see design doc section 5 on why users are
+    # deactivated, not hard-deleted (the coin ledger and competition
+    # history both depend on the user row still existing).
+    is_active: Mapped[bool] = mapped_column(nullable=False, server_default=text("true"))
+
+    # Administration flag. True only for internal operators; gates every
+    # /admin/* endpoint through get_current_admin(). Promoted via SQL
+    # (UPDATE users SET is_admin = true WHERE ...) — never by the app, so
+    # there is no endpoint a normal user could call to self-promote.
+    is_admin: Mapped[bool] = mapped_column(nullable=False, server_default=text("false"))
+
+    created_at: Mapped[datetime] = mapped_column(server_default=text("now()"), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        server_default=text("now()"), onupdate=text("now()"), nullable=False
     )
-    token: Mapped[str] = mapped_column(String(512), unique=True, nullable=False)
-    platform: Mapped[DevicePlatform] = mapped_column(str_enum(DevicePlatform), nullable=False)
 
-    user: Mapped[User] = relationship(back_populates="device_tokens")
+    # Relationships populated as later batches add the referencing tables
+    # (avatars, wardrobe, competitions, etc. aren't declared yet).
+    auth_providers: Mapped[list["AuthProvider"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    device_tokens: Mapped[list["DeviceToken"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    avatar: Mapped["Avatar | None"] = relationship(
+        back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
+    wardrobe: Mapped[list["UserWardrobe"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    qr_codes_redeemed: Mapped[list["QRCode"]] = relationship(back_populates="redeemed_by")
+    coin_transactions: Mapped[list["CoinTransaction"]] = relationship(back_populates="user")
+
+    sent_competition_requests: Mapped[list["CompetitionRequest"]] = relationship(
+        foreign_keys="CompetitionRequest.challenger_id", back_populates="challenger"
+    )
+    received_competition_requests: Mapped[list["CompetitionRequest"]] = relationship(
+        foreign_keys="CompetitionRequest.opponent_id", back_populates="opponent"
+    )
+    competitions_as_challenger: Mapped[list["Competition"]] = relationship(
+        foreign_keys="Competition.challenger_id", back_populates="challenger"
+    )
+    competitions_as_opponent: Mapped[list["Competition"]] = relationship(
+        foreign_keys="Competition.opponent_id", back_populates="opponent"
+    )
+    competitions_won: Mapped[list["Competition"]] = relationship(
+        foreign_keys="Competition.winner_id", back_populates="winner"
+    )
+    votes_cast: Mapped[list["Vote"]] = relationship(
+        foreign_keys="Vote.voter_id", back_populates="voter"
+    )
+    votes_received: Mapped[list["Vote"]] = relationship(
+        foreign_keys="Vote.voted_for_user_id", back_populates="voted_for"
+    )
+    notifications_received: Mapped[list["Notification"]] = relationship(
+        foreign_keys="Notification.user_id", back_populates="user", cascade="all, delete-orphan"
+    )
+    notifications_triggered: Mapped[list["Notification"]] = relationship(
+        foreign_keys="Notification.actor_user_id", back_populates="actor"
+    )
+
+    # Self-referential through Follow — two distinct relationships
+    # because a user shows up in both the follower_id and followee_id
+    # columns across different rows.
+    following: Mapped[list["Follow"]] = relationship(
+        foreign_keys="Follow.follower_id", back_populates="follower", cascade="all, delete-orphan"
+    )
+    followers: Mapped[list["Follow"]] = relationship(
+        foreign_keys="Follow.followee_id", back_populates="followee", cascade="all, delete-orphan"
+    )
+
+    def __repr__(self) -> str:
+        return f"<User {self.username!r}>"
