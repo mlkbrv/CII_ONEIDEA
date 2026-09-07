@@ -2,8 +2,11 @@ import threading
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+import pathlib
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -67,6 +70,23 @@ app.include_router(votes_router)
 app.include_router(leaderboard_router)
 app.include_router(notifications_router)
 app.include_router(admin_router)
+
+
+# Avatar and clothing art. Served by the API rather than a CDN because the
+# whole set is a few hundred KB of SVG and one origin means one thing to
+# deploy — and Telegram Mini Apps are strict about mixed content.
+MEDIA_DIR = pathlib.Path(__file__).resolve().parent.parent / "media"
+MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/media", StaticFiles(directory=MEDIA_DIR), name="media")
+
+
+@app.get("/health")
+def health() -> dict:
+    """Liveness. Deliberately does NOT touch the database — a health check
+    that fails when Postgres blips takes the app out of rotation for a
+    problem restarting the app cannot fix. /health/db is the one that
+    reports the database."""
+    return {"status": "ok"}
 
 
 @app.get("/health/db")
