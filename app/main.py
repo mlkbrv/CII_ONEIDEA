@@ -60,6 +60,38 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+# Cache-Control for everything we serve as a file.
+#
+# Without these the responses carry no caching headers at all, and Cloudflare
+# applies its own default TTL by file extension. That is fine for the hashed
+# bundles and actively wrong for index.html and sw.js: both keep their names
+# across deploys, so a cached copy at the edge pins every visitor to an old
+# build. It is how a shipped feature can be invisible in production while the
+# container serves the new file correctly.
+IMMUTABLE_PREFIXES = ("/app/assets/", "/admin-ui/assets/")
+REVALIDATE_EXACT = ("/app/sw.js", "/app/index.html", "/admin-ui/index.html")
+
+
+@app.middleware("http")
+async def cache_headers(request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+
+    if path.startswith(IMMUTABLE_PREFIXES):
+        # Vite puts a content hash in the filename, so a given URL's bytes can
+        # never change. Cache it for a year and never revalidate.
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif path in REVALIDATE_EXACT or path in ("/app/", "/admin-ui/"):
+        # Stable names, changing content: must be checked on every load.
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    elif path.startswith("/media/"):
+        # Artwork changes only when a designer replaces a file, and a short
+        # window of staleness there costs nothing.
+        response.headers["Cache-Control"] = "public, max-age=3600"
+
+    return response
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(qr_router)

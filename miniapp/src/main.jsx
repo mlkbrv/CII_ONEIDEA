@@ -47,7 +47,9 @@ if (isTelegram) {
 // so it never competes with the first paint for bandwidth.
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/app/sw.js").catch(() => {
+    // The ?v= is a cache-buster for CDN edges holding an older sw.js.
+    // Bump it whenever the worker's strategy changes.
+    navigator.serviceWorker.register("/app/sw.js?v=2").catch(() => {
       // Blocked in a private window, or served over plain http in dev. The app
       // works without it; only offline caching and install are lost.
     });
