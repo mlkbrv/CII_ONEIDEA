@@ -71,15 +71,39 @@ services:
     command: ["python", "-m", "app.worker"]
     restart: unless-stopped
 
+  # Before the real domain exists: a Cloudflare quick tunnel. It prints a
+  # random https://<something>.trycloudflare.com URL in its logs, needs no
+  # account and no token, and still binds nothing on the host — enough to open
+  # the app on a phone and even to point a test bot at it.
+  #
+  #   docker compose --profile preview up -d preview
+  #   docker compose logs preview | grep trycloudflare
+  #
+  # The URL changes on every restart, so it is for testing only.
+  preview:
+    image: cloudflare/cloudflared:latest
+    container_name: cci-preview
+    profiles: ["preview"]
+    command: tunnel --no-autoupdate --url http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: cci-tunnel
+    # A profile, so the stack can be brought up and tested before the domain
+    # exists. Once TUNNEL_TOKEN is in .env, `--profile tunnel` publishes it.
+    profiles: ["tunnel"]
     depends_on:
       api:
         condition: service_healthy
     command: tunnel --no-autoupdate run
     environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
+      # Must be set in .env before enabling this profile; cloudflared exits
+      # immediately with a clear error if it is empty.
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
     restart: unless-stopped
 
 volumes:
