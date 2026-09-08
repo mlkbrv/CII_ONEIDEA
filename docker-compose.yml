@@ -44,6 +44,13 @@ services:
       DATABASE_URL: postgresql+psycopg://cci:${POSTGRES_PASSWORD}@postgres:5432/cci
       # The sweeper and the bot belong to the worker; see app/worker.py.
       RUN_SWEEPER: "false"
+    volumes:
+      # Clothing submitted through /catalog is written here. A named volume,
+      # not the image, because `docker compose up --build` replaces the image
+      # and would otherwise throw away every contributed item. Mounted on
+      # media/uploads rather than media/clothing so it sits beside the 24
+      # items baked into the image instead of hiding them.
+      - cci_media:/app/media/uploads
     expose:
       - "8000"
     healthcheck:
@@ -121,3 +128,4 @@ services:
 
 volumes:
   cci_pgdata:
+  cci_media:

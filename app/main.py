@@ -16,6 +16,7 @@ from app.routers import (
     admin_router,
     auth_router,
     avatar_router,
+    catalog_router,
     clothing_router,
     competition_requests_router,
     competitions_router,
@@ -103,6 +104,7 @@ app.include_router(competitions_router)
 app.include_router(votes_router)
 app.include_router(leaderboard_router)
 app.include_router(notifications_router)
+app.include_router(catalog_router)
 app.include_router(admin_router)
 
 

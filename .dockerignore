@@ -12,3 +12,4 @@ admin/dist
 *.md
 docs
 promo_codes*.csv
+media/uploads

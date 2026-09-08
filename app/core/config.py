@@ -49,6 +49,14 @@ class Settings(BaseSettings):
     # How often the worker polls for undelivered notifications. Seconds.
     notification_poll_interval_seconds: int = 5
 
+    # --- Catalog submission ---------------------------------------------
+    # Shared key for POST/PATCH/DELETE on /catalog — the door through which
+    # clothing is contributed by someone who has HTTP and nothing else (see
+    # app/routers/catalog.py). Reading /catalog stays open; writing does not,
+    # because these writes put files on disk and rows in the shop. Empty
+    # disables the write endpoints entirely rather than opening them.
+    catalog_api_key: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
