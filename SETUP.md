@@ -42,24 +42,21 @@ Telegram Mini App / PWA ──HTTP──► FastAPI ──► PostgreSQL
 
 ## 1. Текущее состояние
 
-**Уже сделано и работает на сервере 89.117.49.72:**
+**Работает прямо сейчас на https://cci.koblab.az**
 
-- Код лежит в `/opt/cci`, стек поднят, миграции прошли на чистой базе
-  (24 предмета одежды, 10 типов уведомлений).
-- Ни один порт хоста не занят. Контейнеры link2do и stride не тронуты —
-  сверял ID и аптайм до и после деплоя, они идентичны.
-- `.env` создан, `POSTGRES_PASSWORD` и `SECRET_KEY` сгенерированы случайно,
-  права `600`.
+- Сервер 89.117.49.72, код в `/opt/cci`, четыре контейнера подняты.
+- Постоянный адрес через Cloudflare Tunnel, HTTPS с валидным сертификатом.
+  Ни один порт хоста не занят — 80, 443 и 8080 по-прежнему у link2do и stride,
+  их контейнеры не перезапускались.
+- Бот `@cci_cocacola_bot` авторизован, кнопку меню выставил сам.
+- Мини-апп: https://cci.koblab.az/app/ · Админка: https://cci.koblab.az/admin-ui/
 
-**Что нужно сделать тебе (без этого приложение работает, но снаружи не видно
-и бот молчит):**
+**Осталось руками:**
 
-1. Купить/подключить домен в Cloudflare — раздел 4.
-2. Создать бота и Mini App в BotFather — раздел 5.
-3. Вписать три значения в `/opt/cci/.env` и перезапустить — раздел 6.
-4. Сделать себе админа и нагенерить кодов для крышек — разделы 7 и 8.
-
----
+1. Зарегистрировать Mini App в BotFather — раздел 5. Без этого приложение
+   открывается по ссылке, но кнопки в чате не будет.
+2. Сделать себе админа — раздел 7.
+3. Нагенерить коды для крышек — раздел 8.
 
 ## 2. Локальная разработка (Windows)
 
@@ -161,80 +158,63 @@ ssh root@89.117.49.72 'cd /opt/cci && tar xzf cci.tar.gz && rm cci.tar.gz && doc
 
 ## 4. Домен и Cloudflare Tunnel
 
-### Почему именно туннель
+### Почему туннель, а не nginx
 
 На сервере уже живут два чужих проекта: порт **80** держит nginx-контейнер
 link2do, порт **443** — Caddy от stride. Чтобы повесить свой `server_name`,
-пришлось бы лезть в их конфиги, то есть править чужой прод.
+пришлось бы править чужой прод.
 
 Cloudflare Tunnel это обходит: `cloudflared` соединяется **изнутри наружу**,
 портов на хосте не занимает вообще, HTTPS и сертификат даёт Cloudflare.
-Telegram Mini App без HTTPS не работает, так что это ещё и бесплатно решает
-вопрос сертификата.
+Telegram Mini App без HTTPS не работает, так что это ещё и решает вопрос
+сертификата.
 
-### 4.1. Домен
+### Что уже сделано
 
-1. Зайди на https://dash.cloudflare.com
-2. Купить новый: **Domain Registration → Register Domain**.
-   Уже есть у другого регистратора: **Add a site** и поменяй NS-серверы у
-   регистратора на те, что покажет Cloudflare (обновляются до суток).
-3. Дождись статуса **Active**.
+Зона `koblab.az` уже была в Cloudflare, поэтому NS никуда не переносились и
+записи корня и `www` не трогались — добавился ровно один CNAME для `cci`.
 
-Домен подойдёт любой. Дальше в примерах — `colafest.example.com`.
+Туннель **locally-managed**: креды лежат в `/opt/cci/cloudflared` на сервере,
+а не в дашборде. Так сделано потому, что панель Zero Trust просит привязать
+карту даже на бесплатном тарифе, а этот путь идёт через обычный логин
+Cloudflare и стоит ноль.
 
-### 4.2. Туннель
-
-1. В дашборде: **Zero Trust** (левое меню) → **Networks** → **Tunnels**
-2. **Create a tunnel** → тип **Cloudflared** → имя, например `cci`
-3. На шаге установки Cloudflare покажет команду вида
-   `cloudflared service install eyJhIjoi...` — **тебе нужен только длинный
-   токен** `eyJhIjoi...`. Сам cloudflared ставить не надо, он уже в compose.
-4. Дальше — **Public Hostnames** → **Add a public hostname**:
-
-   | поле | значение |
-   |---|---|
-   | Subdomain | `colafest` (или пусто, если хочешь на корне домена) |
-   | Domain | твой домен |
-   | Type | `HTTP` |
-   | URL | `api:8000` |
-
-   `api:8000` — это имя контейнера внутри docker-сети. Не `localhost`.
-
-5. Save.
-
-### 4.3. Включить туннель на сервере
+Как это было создано (повторять не нужно, записано на случай переезда):
 
 ```bash
-ssh root@89.117.49.72
-nano /opt/cci/.env      # вставь TUNNEL_TOKEN=eyJhIjoi...
+CFD="docker run --rm -v /opt/cci/cloudflared:/home/nonroot/.cloudflared cloudflare/cloudflared:latest"
+
+# каталог должен принадлежать uid 65532 — образ работает не от root,
+# иначе `login` не сможет записать свой cert.pem уже ПОСЛЕ клика в браузере
+mkdir -p /opt/cci/cloudflared && chown -R 65532:65532 /opt/cci/cloudflared
+
+$CFD tunnel login                          # печатает ссылку, один клик в браузере
+$CFD tunnel create cci
+$CFD tunnel route dns cci cci.koblab.az    # создаёт CNAME
 cd /opt/cci && docker compose --profile tunnel up -d
 ```
 
-Проверка:
+### Сменить адрес
 
 ```bash
-curl https://colafest.example.com/health
+docker run --rm -v /opt/cci/cloudflared:/home/nonroot/.cloudflared   cloudflare/cloudflared:latest tunnel route dns cci новый.домен
+nano /opt/cci/.env          # TELEGRAM_WEBAPP_URL=https://новый.домен/app/
+cd /opt/cci && docker compose --profile tunnel up -d
 ```
 
-Должно ответить `{"status":"ok"}`.
+И обновить URL в BotFather — иначе Telegram продолжит открывать старый.
 
-### 4.4. Если домена ещё нет, а посмотреть хочется сейчас
+### Посмотреть без домена вообще
 
-Есть быстрый туннель — без аккаунта, без токена, без домена:
+Быстрый туннель, без аккаунта и без токена:
 
 ```bash
 cd /opt/cci && docker compose --profile preview up -d preview
 docker compose logs preview | grep trycloudflare
 ```
 
-В логах появится адрес вида `https://random-words-here.trycloudflare.com` —
-по нему приложение открывается с телефона прямо сейчас. Адрес публичный
-(случайный, но публичный) и меняется при каждом рестарте, так что для боевого
-BotFather он не годится — только посмотреть.
-
+Адрес меняется при каждом рестарте, поэтому только «посмотреть».
 Выключить: `docker compose stop preview && docker compose rm -f preview`
-
----
 
 ## 5. Бот и Mini App в BotFather
 
@@ -247,7 +227,7 @@ BotFather он не годится — только посмотреть.
 ```
 
 Имя (видно людям) и username (обязан заканчиваться на `bot`, например
-`colafest_bot`). BotFather выдаст токен вида `123456789:AAE...` —
+`cci_cocacola_bot`). BotFather выдаст токен вида `123456789:AAE...` —
 это `TELEGRAM_BOT_TOKEN`.
 
 ### 5.2. Создать Mini App
@@ -260,7 +240,7 @@ BotFather он не годится — только посмотреть.
 - Title: `Cola Fest`
 - Description: любое
 - иконка 640×360
-- **Web App URL:** `https://colafest.example.com/app/`
+- **Web App URL:** `https://cci.koblab.az/app/`
   — **со слэшем на конце и обязательно `/app/`**
 - Short name: `colafest` (латиница)
 
@@ -270,7 +250,7 @@ BotFather он не годится — только посмотреть.
 /setmenubutton
 ```
 
-Выбери бота → тот же URL `https://colafest.example.com/app/`.
+Выбери бота → тот же URL `https://cci.koblab.az/app/`.
 
 Бот при старте сам выставляет эту кнопку из `TELEGRAM_WEBAPP_URL`, но руками
 надёжнее — Telegram иногда кеширует.
@@ -289,43 +269,42 @@ me - Баланс и серия побед
 
 ---
 
-## 6. Заполнить .env и перезапустить
+## 6. .env на сервере
 
-```bash
-ssh root@89.117.49.72
-nano /opt/cci/.env
-```
+Уже заполнен, трогать не нужно. Для справки — что в нём и откуда:
 
-```env
-POSTGRES_PASSWORD=      # уже сгенерирован, не трогай
-SECRET_KEY=             # уже сгенерирован, не трогай
-ACCESS_TOKEN_EXPIRE_MINUTES=10080
+| переменная | значение | откуда |
+|---|---|---|
+| `POSTGRES_PASSWORD` | сгенерирован | случайно при деплое |
+| `SECRET_KEY` | сгенерирован | случайно при деплое, подписывает JWT |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `10080` | неделя |
+| `TELEGRAM_BOT_TOKEN` | `8930791876:...` | BotFather |
+| `TELEGRAM_BOT_USERNAME` | `cci_cocacola_bot` | BotFather |
+| `TELEGRAM_WEBAPP_URL` | `https://cci.koblab.az/app/` | наш адрес |
 
-TELEGRAM_BOT_TOKEN=123456789:AAE...
-TELEGRAM_BOT_USERNAME=colafest_bot
-TELEGRAM_WEBAPP_URL=https://colafest.example.com/app/
+`TUNNEL_TOKEN` не нужен: туннель работает на локальных кредах из
+`/opt/cci/cloudflared` — см. раздел 4.
 
-TUNNEL_TOKEN=eyJhIjoi...
-```
+Файл с правами `600`, в git его нет и никогда не было.
+
+После любой правки:
 
 ```bash
 cd /opt/cci && docker compose --profile tunnel up -d
 docker compose logs worker --tail 20
 ```
 
-В логах воркера должно появиться:
+Признак, что всё сошлось:
 
 ```
-Telegram bot authorised as @colafest_bot
-Menu button points at https://colafest.example.com/app/
+Telegram bot authorised as @cci_cocacola_bot
+Menu button points at https://cci.koblab.az/app/
 Notification delivery loop started
 ```
 
 > ⚠️ Токен бота в `.env` и бот, в котором открыт Mini App, должны быть **одним
 > и тем же ботом**. Иначе подпись `initData` не сойдётся и мини-апп будет
 > получать 401 на каждый запрос.
-
----
 
 ## 7. Сделать себе админа
 
@@ -336,7 +315,7 @@ Notification delivery loop started
    не через Telegram):
 
 ```bash
-curl -X POST https://colafest.example.com/auth/register \
+curl -X POST https://cci.koblab.az/auth/register \
   -H 'Content-Type: application/json' \
   -d '{"username":"admin","email":"admin@example.com","password":"длинный-пароль"}'
 ```
@@ -348,7 +327,7 @@ ssh root@89.117.49.72
 docker exec cci-postgres psql -U cci -d cci -c "UPDATE users SET is_admin = true WHERE username = 'admin';"
 ```
 
-3. Заходи на `https://colafest.example.com/admin-ui/` этой же парой.
+3. Заходи на `https://cci.koblab.az/admin-ui/` этой же парой.
 
 В админке: пользователи, продукты, QR-коды, одежда (включая замену картинок).
 
@@ -410,10 +389,10 @@ docker compose logs worker --tail 30
 ### Снаружи
 
 ```bash
-curl https://colafest.example.com/health        # {"status":"ok"}
-curl https://colafest.example.com/health/db     # {"database":"ok","result":1}
-curl -I https://colafest.example.com/app/       # 200
-curl -I https://colafest.example.com/admin-ui/  # 200
+curl https://cci.koblab.az/health        # {"status":"ok"}
+curl https://cci.koblab.az/health/db     # {"database":"ok","result":1}
+curl -I https://cci.koblab.az/app/       # 200
+curl -I https://cci.koblab.az/admin-ui/  # 200
 ```
 
 ### С телефона, полный путь
