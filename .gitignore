@@ -11,3 +11,4 @@ dist-ssr/
 *.local
 .DS_Store
 media/uploads/
+cloudflared/
