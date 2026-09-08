@@ -1,3 +1,15 @@
+# Cola Fest — four containers, zero host ports.
+#
+# The server this runs on already hosts other projects: one of them owns port
+# 80 (an nginx container) and another owns 443 (a Caddy container). Publishing
+# a port here would either collide outright or require editing somebody else's
+# reverse proxy config.
+#
+# Cloudflare Tunnel avoids the question entirely. `cloudflared` makes an
+# OUTBOUND connection to Cloudflare, so nothing is bound on the host at all,
+# and Cloudflare terminates TLS — which a Telegram Mini App requires and which
+# would otherwise mean fitting a certificate into a proxy we do not own.
+
 name: cci
 
 services:
@@ -6,10 +18,12 @@ services:
     container_name: cci-postgres
     environment:
       POSTGRES_USER: cci
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: cci
     volumes:
       - cci_pgdata:/var/lib/postgresql/data
+    # `expose`, not `ports`: reachable from the other containers on this
+    # project's network and from nowhere else.
     expose:
       - "5432"
     healthcheck:
@@ -25,26 +39,47 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    env_file:
-      - .env
+    env_file: [.env]
     environment:
-      DATABASE_URL: postgresql+asyncpg://cci:postgres@postgres:5432/cci
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
-      TELEGRAM_WEBAPP_URL: ${TELEGRAM_WEBAPP_URL}
-      JWT_SECRET: ${JWT_SECRET}
-      PROMO_CODE_PEPPER: ${PROMO_CODE_PEPPER}
-      BOT_POLLING: "true"
-    ports:
-      - "18080:8000"
+      DATABASE_URL: postgresql+psycopg://cci:${POSTGRES_PASSWORD}@postgres:5432/cci
+      # The sweeper and the bot belong to the worker; see app/worker.py.
+      RUN_SWEEPER: "false"
+    expose:
+      - "8000"
+    healthcheck:
+      # /health deliberately does not touch the database: restarting the API
+      # cannot fix Postgres, so a DB blip must not take the API out of rotation.
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  worker:
+    build: .
+    container_name: cci-worker
+    depends_on:
+      # Waits for the API because the API runs the migrations. Starting the
+      # worker against a schema that has not been upgraded yet would crash it
+      # in a restart loop until the API happened to win the race.
+      api:
+        condition: service_healthy
+    env_file: [.env]
+    environment:
+      DATABASE_URL: postgresql+psycopg://cci:${POSTGRES_PASSWORD}@postgres:5432/cci
+    command: ["python", "-m", "app.worker"]
     restart: unless-stopped
 
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: cci-tunnel
-    profiles: ["tunnel"]
-    command: tunnel --no-autoupdate --url http://api:8000
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
     restart: unless-stopped
 
 volumes:
