@@ -1,16 +1,28 @@
 /*
- * Service worker — PWA install and a cache for the app shell.
+ * Service worker — PWA install, and a cache that cannot serve a stale app.
  *
- * Deliberately narrow. It caches the built shell (HTML, JS, CSS, artwork)
- * so a reopened app paints instantly, and it NEVER caches API responses:
- * coin balances, battle scores and vote counts are the whole game, and a
- * stale one is worse than a spinner. Anything under an API path goes
- * straight to the network, always.
+ * Three strategies, because the three kinds of request want different things:
+ *
+ *   API            never cached. Coin balances, battle scores and vote counts
+ *                  are the whole game; a stale one is worse than a spinner.
+ *
+ *   the HTML shell network first, cache only as an offline fallback. This is
+ *                  the one that matters: index.html names the hashed JS
+ *                  bundle, so caching it first would pin a returning user to
+ *                  whatever build they first opened — every later deploy
+ *                  invisible to them until the cache name happened to change.
+ *                  That is exactly what happened before this rewrite.
+ *
+ *   hashed assets  cache first. /app/assets/index-<hash>.js is immutable by
+ *                  construction: a new build produces a new filename, so a
+ *                  cached copy can never be the wrong one. Artwork under
+ *                  /media is versioned by deploy rather than by name, so it
+ *                  is revalidated in the background after being served.
  */
-const CACHE = "colafest-shell-v1";
-const SHELL = ["/app/", "/app/index.html", "/app/manifest.webmanifest", "/app/icon.svg"];
+const CACHE = "colafest-v2";
+const SHELL = ["/app/", "/app/manifest.webmanifest", "/app/icon.svg"];
 
-// Requests that must never be served from cache.
+// Anything under these must always come from the network.
 const LIVE_PATHS = [
   "/auth",
   "/users",
@@ -25,8 +37,17 @@ const LIVE_PATHS = [
   "/config",
 ];
 
+// Content-addressed by build hash: safe to serve from cache forever.
+const IMMUTABLE = /\/app\/assets\/.+\.[0-9a-zA-Z_-]{8,}\.(js|css)$/;
+
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
+  event.waitUntil(
+    caches.open(CACHE).then((cache) =>
+      // A shell file that 404s must not abort the whole install and leave the
+      // worker permanently uninstalled.
+      Promise.allSettled(SHELL.map((path) => cache.add(path)))
+    )
+  );
   self.skipWaiting();
 });
 
@@ -35,31 +56,74 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  const isLive = LIVE_PATHS.some((path) => url.pathname.startsWith(path));
 
-  if (event.request.method !== "GET" || isLive) {
-    return; // straight to the network
+  if (event.request.method !== "GET") return;
+  if (LIVE_PATHS.some((path) => url.pathname.startsWith(path))) return;
+  if (url.origin !== self.location.origin) return;
+
+  // The shell: a navigation, or index.html itself.
+  const isShell =
+    event.request.mode === "navigate" ||
+    url.pathname === "/app/" ||
+    url.pathname === "/app/index.html";
+
+  if (isShell) {
+    event.respondWith(networkFirst(event.request));
+    return;
   }
 
-  // Cache-first for the shell and the artwork; both are versioned by build
-  // hash or replaced wholesale, so a stale copy cannot be wrong for long.
-  event.respondWith(
-    caches.match(event.request).then(
-      (hit) =>
-        hit ||
-        fetch(event.request).then((response) => {
-          if (response.ok && url.origin === self.location.origin) {
-            const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(event.request, copy));
-          }
-          return response;
-        })
-    )
-  );
+  if (IMMUTABLE.test(url.pathname)) {
+    event.respondWith(cacheFirst(event.request, { revalidate: false }));
+    return;
+  }
+
+  // Artwork and the manifest: fast, but checked in the background.
+  event.respondWith(cacheFirst(event.request, { revalidate: true }));
 });
+
+async function networkFirst(request) {
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      const copy = response.clone();
+      caches.open(CACHE).then((cache) => cache.put(request, copy));
+    }
+    return response;
+  } catch {
+    // Offline. The cached shell still boots the app, which then shows its own
+    // error states for whatever it cannot fetch.
+    const cached = await caches.match(request);
+    return cached || caches.match("/app/");
+  }
+}
+
+async function cacheFirst(request, { revalidate }) {
+  const cached = await caches.match(request);
+
+  if (cached) {
+    if (revalidate) {
+      // Refresh in the background; this response is already on its way.
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            caches.open(CACHE).then((cache) => cache.put(request, response));
+          }
+        })
+        .catch(() => {});
+    }
+    return cached;
+  }
+
+  const response = await fetch(request);
+  if (response.ok) {
+    const copy = response.clone();
+    caches.open(CACHE).then((cache) => cache.put(request, copy));
+  }
+  return response;
+}
