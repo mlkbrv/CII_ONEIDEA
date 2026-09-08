@@ -15,7 +15,9 @@ import ClothingDetailPage from './pages/ClothingDetailPage'
 
 export default function App() {
   return (
-    <BrowserRouter>
+    // basename matches where FastAPI mounts the build. Without it every
+    // route resolves against the domain root and the panel 404s on refresh.
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />

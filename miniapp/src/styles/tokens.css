@@ -1,0 +1,56 @@
+/*
+ * Design tokens and the reset everything else builds on.
+ *
+ * Colours come from Telegram when it supplies them (applyTheme writes --tg-*
+ * variables onto :root) and fall back to the Cola Fest palette otherwise, so
+ * the app looks native in whichever client the user has and still looks
+ * deliberate in a browser tab.
+ */
+:root {
+  --red: #e4002b;
+  --red-deep: #a5001f;
+  --gold: #f2c230;
+
+  /* Each of these takes Telegram's value when there is one. */
+  --bg: var(--tg-bg-color, #12151a);
+  --surface: var(--tg-secondary-bg-color, #1b2029);
+  --text: var(--tg-text-color, #f2f4f7);
+  --muted: var(--tg-hint-color, #97a1b0);
+  --accent: var(--tg-button-color, var(--red));
+  --accent-text: var(--tg-button-text-color, #ffffff);
+  --link: var(--tg-link-color, #6ab7ff);
+
+  --radius: 14px;
+  --gap: 12px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  /* Stops the whole page rubber-banding under the fixed header and nav. */
+  overscroll-behavior-y: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+input,
+button {
+  font: inherit;
+  color: inherit;
+}

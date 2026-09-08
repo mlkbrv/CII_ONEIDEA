@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # request really came from Telegram. Empty disables Telegram auth.
     telegram_bot_token: str = ""
 
+    # The bot's @handle, without the @. The browser/PWA sign-in path needs it
+    # to render the Telegram Login Widget; inside Telegram it is unused.
+    telegram_bot_username: str = ""
+
     # https URL the Mini App is served from, e.g. https://cci.example.com/app/.
     # Must match what is configured in BotFather or the button does nothing.
     telegram_webapp_url: str = ""
