@@ -77,12 +77,16 @@ export const haptic = {
 /**
  * Scan a QR code.
  *
+ * Both labels are passed in rather than written here: this module is the only
+ * place that knows about Telegram, and it should not also be a place that
+ * knows Russian.
+ *
  * Resolves to the scanned text, or null when the user cancelled OR when this
  * runtime cannot scan at all. Null is not an error: the caller shows the
  * manual-entry field either way, which is also the fallback for a cap whose
  * code is printed but not encoded.
  */
-export async function scanQr(prompt = "Наведи на QR-код с крышки") {
+export async function scanQr(prompt = "", cancelLabel = "Cancel") {
   if (tg?.showScanQrPopup) {
     return new Promise((resolve) => {
       tg.showScanQrPopup({ text: prompt }, (text) => {
@@ -92,7 +96,7 @@ export async function scanQr(prompt = "Наведи на QR-код с крышк
       });
     });
   }
-  return scanWithCamera();
+  return scanWithCamera(cancelLabel);
 }
 
 /** True when this runtime can open a camera scanner at all. */
@@ -117,7 +121,7 @@ function hasBarcodeDetector() {
  * load, for a path that is not how Cola Fest is distributed — the Mini App's
  * native scanner is. Worth revisiting if the PWA becomes a real entry point.
  */
-async function scanWithCamera() {
+async function scanWithCamera(cancelLabel) {
   if (!hasBarcodeDetector()) return null;
 
   let stream;
@@ -137,7 +141,7 @@ async function scanWithCamera() {
   document.body.appendChild(video);
 
   const cancel = document.createElement("button");
-  cancel.textContent = "Отмена";
+  cancel.textContent = cancelLabel;
   cancel.style.cssText =
     "position:fixed;left:50%;bottom:40px;transform:translateX(-50%);z-index:10000;" +
     "padding:14px 28px;border:0;border-radius:999px;font:600 16px system-ui;" +

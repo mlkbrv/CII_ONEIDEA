@@ -10,18 +10,22 @@
 import { useState } from "react";
 
 import { useRedeemCode } from "../api/queries";
+import { useT } from "../i18n";
 import { canScan, haptic, scanQr } from "../platform/telegram";
 import { Button, Card, Coins } from "../components/ui";
 
-const MESSAGES = {
-  404: "Код не найден. Проверь, что ввёл его правильно.",
-  409: "Этот код уже использован.",
-  410: "Срок действия кода истёк.",
-  401: "Открой приложение из Telegram.",
-  503: "Бот ещё не настроен на сервере.",
+// HTTP status -> which sentence to show. The server's own `detail` is in
+// English, so these are used in preference to it.
+const MESSAGE_KEYS = {
+  404: "scan.err_404",
+  409: "scan.err_409",
+  410: "scan.err_410",
+  401: "scan.err_401",
+  503: "scan.err_503",
 };
 
 export default function Scan() {
+  const t = useT();
   const [code, setCode] = useState("");
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -39,13 +43,13 @@ export default function Scan() {
       setCode("");
       haptic.success();
     } catch (err) {
-      setError(MESSAGES[err.status] || err.detail || "Не удалось активировать код");
+      setError(t(MESSAGE_KEYS[err.status] || "scan.err_generic"));
       haptic.error();
     }
   }
 
   async function scan() {
-    const scanned = await scanQr();
+    const scanned = await scanQr(t("scan.hint"), t("common.cancel"));
     // null means cancelled, or this runtime cannot scan — either way there is
     // nothing to report, the field below is right there.
     if (scanned) {
@@ -58,14 +62,12 @@ export default function Scan() {
     <div className="screen scan">
       <Card>
         <p className="eyebrow">Cola Fest</p>
-        <h1 className="screen-title">Код с крышки</h1>
-        <p className="muted">
-          Каждая крышка — это монеты. Отсканируй код или введи его руками.
-        </p>
+        <h1 className="screen-title">{t("scan.title")}</h1>
+        <p className="muted">{t("scan.hint")}</p>
 
         {canScan() ? (
           <Button onClick={scan} className="cta">
-            📷 Сканировать
+            {t("scan.scan_button")}
           </Button>
         ) : null}
 
@@ -79,7 +81,7 @@ export default function Scan() {
           <input
             value={code}
             onChange={(event) => setCode(event.target.value)}
-            placeholder="XXXX-XXXX"
+            placeholder={t("scan.placeholder")}
             // Codes are printed in capitals; autocorrect on a phone otherwise
             // "helps" by lowercasing and inserting spaces.
             autoCapitalize="characters"
@@ -87,16 +89,16 @@ export default function Scan() {
             autoComplete="off"
             spellCheck="false"
             maxLength={64}
-            aria-label="Код с крышки"
+            aria-label={t("scan.label")}
           />
           <Button type="submit" disabled={redeem.isPending || !code.trim()}>
-            {redeem.isPending ? "Проверяем…" : "Активировать"}
+            {redeem.isPending ? t("scan.checking") : t("scan.submit")}
           </Button>
         </form>
 
         {result ? (
           <p className="status status-ok">
-            Готово! +{result.coins_earned} монет. Баланс:{" "}
+            {t("scan.success", { coins: result.coins_earned })}{" "}
             <Coins amount={result.balance} />
           </p>
         ) : null}

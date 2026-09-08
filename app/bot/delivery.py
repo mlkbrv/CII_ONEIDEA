@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import SessionLocal
 from app.models import Notification, User
+from app.bot.keyboards import webapp_keyboard
 from app.services.notifications import render
 
 logger = logging.getLogger("cci.bot.delivery")
@@ -43,16 +44,22 @@ logger = logging.getLogger("cci.bot.delivery")
 BATCH_SIZE = 25
 
 
-async def deliver_pending(bot: Bot, keyboard=None) -> int:
+async def deliver_pending(bot: Bot) -> int:
     """Send one batch of undelivered notifications. Returns how many were sent."""
     pending = await asyncio.to_thread(_load_pending)
     if not pending:
         return 0
 
     sent = 0
-    for notification_id, chat_id, text in pending:
+    for notification_id, chat_id, text, language in pending:
         try:
-            await bot.send_message(chat_id, text, reply_markup=keyboard)
+            # The button is built per message rather than once per batch: its
+            # label is words too, and a Russian button under an Azerbaijani
+            # notification is exactly the kind of half-translated app this
+            # feature exists to avoid.
+            await bot.send_message(
+                chat_id, text, reply_markup=webapp_keyboard(language=language)
+            )
         except TelegramRetryAfter as exc:
             # Telegram tells us exactly how long to wait. Stop the batch here;
             # what is left stays undelivered and goes out on the next pass.
@@ -78,7 +85,7 @@ async def deliver_pending(bot: Bot, keyboard=None) -> int:
 
 
 def _load_pending() -> list[tuple]:
-    """(notification_id, telegram chat id, rendered text) for the next batch.
+    """(notification_id, chat id, rendered text, language) for the next batch.
 
     Rendered here rather than in the sending loop so the DB session — and the
     ORM objects that belong to it — never outlive this function.
@@ -115,7 +122,11 @@ def _load_pending() -> list[tuple]:
                         row.type.type_name,
                         row.actor.username if row.actor else None,
                         row.payload,
+                        # The RECIPIENT's language, not the actor's: the
+                        # person reading this is the one being notified.
+                        recipient.language,
                     ),
+                    recipient.language,
                 )
             )
 
@@ -140,7 +151,7 @@ def _stamp(db: Session, notification_ids: list) -> None:
             notification.delivered_at = now
 
 
-async def run_delivery_loop(bot: Bot, interval_seconds: int, keyboard=None) -> None:
+async def run_delivery_loop(bot: Bot, interval_seconds: int) -> None:
     """Deliver forever, pausing between passes when the queue runs dry.
 
     A pass that sent a full batch does not sleep — a backlog should drain at
@@ -149,7 +160,7 @@ async def run_delivery_loop(bot: Bot, interval_seconds: int, keyboard=None) -> N
     logger.info("Notification delivery loop started (every %ss)", interval_seconds)
     while True:
         try:
-            sent = await deliver_pending(bot, keyboard)
+            sent = await deliver_pending(bot)
         except Exception:
             # A failure here must not kill the loop; the next pass retries.
             logger.exception("Notification delivery pass failed")

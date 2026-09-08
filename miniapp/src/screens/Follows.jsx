@@ -6,9 +6,11 @@ import { Link, useParams } from "react-router-dom";
 
 import { useFollow, useFollowers } from "../api/queries";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { useT } from "../i18n";
 import { haptic } from "../platform/telegram";
 
 export default function Follows({ kind }) {
+  const t = useT();
   const { userId } = useParams();
   const list = useFollowers(userId, kind);
   const follow = useFollow();
@@ -19,7 +21,9 @@ export default function Follows({ kind }) {
 
   return (
     <div className="screen follows">
-      <h1 className="screen-title">{kind === "followers" ? "Подписчики" : "Подписки"}</h1>
+      <h1 className="screen-title">
+        {t(kind === "followers" ? "follows.followers" : "follows.following")}
+      </h1>
 
       {list.isLoading ? (
         <div className="list">
@@ -30,7 +34,7 @@ export default function Follows({ kind }) {
       ) : rows.length === 0 ? (
         <EmptyState
           icon="👥"
-          title={kind === "followers" ? "Пока нет подписчиков" : "Пока нет подписок"}
+          title={t(kind === "followers" ? "follows.no_followers" : "follows.no_following")}
         />
       ) : (
         <div className="list">
@@ -60,7 +64,7 @@ export default function Follows({ kind }) {
                   }
                 }}
               >
-                {user.is_following ? "Отписаться" : "Подписаться"}
+                {t(user.is_following ? "common.unfollow" : "common.follow")}
               </Button>
             </Card>
           ))}

@@ -11,10 +11,12 @@ import { useMemo, useState } from "react";
 import { useCoins, useMyAvatar, usePurchase, useShop, useWardrobe } from "../api/queries";
 import AvatarView, { ItemThumb } from "../components/AvatarView";
 import { Button, Card, Coins, ErrorState, Skeleton, Tabs } from "../components/ui";
+import { useT } from "../i18n";
 import { haptic } from "../platform/telegram";
 
 export default function Shop() {
-  const [category, setCategory] = useState(null);
+  const t = useT();
+  const [slot, setSlot] = useState(null);
   const [selected, setSelected] = useState(null);
   const [message, setMessage] = useState(null);
 
@@ -24,18 +26,16 @@ export default function Shop() {
   const { data: wardrobe } = useWardrobe();
   const purchase = usePurchase();
 
-  // The categories come out of the items themselves. There is no public
-  // categories endpoint, and with a catalogue this size deriving them is one
-  // less request and one less thing that can disagree with the catalogue.
-  const categories = useMemo(() => {
-    const seen = new Map();
-    for (const item of shop.data?.items ?? []) {
-      if (!seen.has(item.category.category_id)) {
-        seen.set(item.category.category_id, item.category.category_name);
-      }
-    }
-    return [...seen.entries()].map(([value, label]) => ({ value, label }));
-  }, [shop.data]);
+  // Grouped by avatar SLOT, not by category. Two reasons: category_name comes
+  // from the database in English and would stay English in every language,
+  // and "hats" is how a player thinks about it anyway — the same grouping the
+  // wardrobe uses, so the two screens sort the catalogue the same way.
+  const slots = useMemo(() => {
+    const present = new Set(
+      (shop.data?.items ?? []).map((item) => item.category.slot)
+    );
+    return [...present].map((value) => ({ value, label: t(`slot.${value}`) }));
+  }, [shop.data, t]);
 
   const owned = useMemo(
     () => new Set((wardrobe?.items ?? []).map((entry) => entry.item.item_id)),
@@ -43,7 +43,7 @@ export default function Shop() {
   );
 
   const items = (shop.data?.items ?? []).filter(
-    (item) => category === null || item.category.category_id === category
+    (item) => slot === null || item.category.slot === slot
   );
 
   async function buy(item) {
@@ -52,18 +52,19 @@ export default function Shop() {
       const result = await purchase.mutateAsync(item.item_id);
       setMessage({
         ok: true,
-        text: `${item.name} — куплено! Осталось ${result.remaining_balance} монет`,
+        text: t("shop.bought", { item: item.name, balance: result.remaining_balance }),
       });
       haptic.success();
     } catch (err) {
       setMessage({
         ok: false,
-        text:
+        text: t(
           err.status === 400
-            ? "Не хватает монет — активируй ещё одну крышку"
+            ? "shop.err_funds"
             : err.status === 409
-              ? "Эта вещь уже у тебя в гардеробе"
-              : err.detail || "Не удалось купить",
+              ? "shop.err_owned"
+              : "shop.err_generic"
+        ),
       });
       haptic.error();
     }
@@ -87,7 +88,7 @@ export default function Shop() {
               </p>
               {owned.has(selected.item_id) ? (
                 <Button variant="ghost" disabled>
-                  Уже в гардеробе
+                  {t("shop.owned")}
                 </Button>
               ) : (
                 <Button
@@ -95,17 +96,15 @@ export default function Shop() {
                   disabled={purchase.isPending || (coins?.balance ?? 0) < selected.price}
                 >
                   {purchase.isPending
-                    ? "Покупаем…"
+                    ? t("shop.buying")
                     : (coins?.balance ?? 0) < selected.price
-                      ? "Не хватает монет"
-                      : "Купить"}
+                      ? t("shop.not_enough")
+                      : t("shop.buy")}
                 </Button>
               )}
             </>
           ) : (
-            <p className="muted">
-              Выбери вещь — примерим её на твоём медведе, прежде чем покупать.
-            </p>
+            <p className="muted">{t("shop.pick_hint")}</p>
           )}
         </div>
       </Card>
@@ -115,9 +114,9 @@ export default function Shop() {
       ) : null}
 
       <Tabs
-        value={category}
-        onChange={setCategory}
-        options={[{ value: null, label: "Все" }, ...categories]}
+        value={slot}
+        onChange={setSlot}
+        options={[{ value: null, label: t("shop.all") }, ...slots]}
       />
 
       {shop.isLoading ? (
@@ -140,7 +139,7 @@ export default function Shop() {
               <ItemThumb item={item} />
               <span className="tile-name">{item.name}</span>
               <span className="tile-price">
-                {owned.has(item.item_id) ? "✓ есть" : <Coins amount={item.price} />}
+                {owned.has(item.item_id) ? t("shop.owned_short") : <Coins amount={item.price} />}
               </span>
             </button>
           ))}

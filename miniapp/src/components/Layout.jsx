@@ -6,22 +6,24 @@ import { useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { useCoins, useUnreadCount } from "../api/queries";
+import { useT } from "../i18n";
 import { backButton } from "../platform/telegram";
 import { Coins } from "./ui";
 
 // The five root destinations. Anything else is a detail screen and gets a
 // back button instead of a highlighted tab.
 const TABS = [
-  { to: "/", label: "Главная", icon: "🏠" },
-  { to: "/shop", label: "Магазин", icon: "🛍" },
-  { to: "/battles", label: "Баттлы", icon: "⚔️" },
-  { to: "/friends", label: "Друзья", icon: "👥" },
-  { to: "/profile", label: "Профиль", icon: "🐻‍❄️" },
+  { to: "/", key: "nav.home", icon: "🏠" },
+  { to: "/shop", key: "nav.shop", icon: "🛍" },
+  { to: "/battles", key: "nav.battles", icon: "⚔️" },
+  { to: "/friends", key: "nav.friends", icon: "👥" },
+  { to: "/profile", key: "nav.profile", icon: "🐻‍❄️" },
 ];
 
 const ROOTS = TABS.map((tab) => tab.to);
 
 export default function Layout({ children }) {
+  const t = useT();
   const location = useLocation();
   const navigate = useNavigate();
   const { data: coins } = useCoins();
@@ -44,7 +46,7 @@ export default function Layout({ children }) {
           <span aria-hidden="true">🐻‍❄️</span> Cola Fest
         </NavLink>
         <div className="header-right">
-          <NavLink to="/notifications" className="bell" aria-label="Уведомления">
+          <NavLink to="/notifications" className="bell" aria-label={t("nav.notifications")}>
             🔔
             {unread?.unread ? <span className="badge">{unread.unread}</span> : null}
           </NavLink>
@@ -65,7 +67,7 @@ export default function Layout({ children }) {
             <span className="nav-icon" aria-hidden="true">
               {tab.icon}
             </span>
-            <span className="nav-label">{tab.label}</span>
+            <span className="nav-label">{t(tab.key)}</span>
           </NavLink>
         ))}
       </nav>

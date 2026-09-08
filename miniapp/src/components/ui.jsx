@@ -6,6 +6,7 @@
  * to say "loading". Screens that reach for their own variants are how an app
  * ends up looking like four different apps.
  */
+import { useT } from "../i18n";
 import { haptic } from "../platform/telegram";
 
 export function Button({ variant = "primary", onClick, className = "", children, ...rest }) {
@@ -82,15 +83,18 @@ export function EmptyState({ icon = "🐻‍❄️", title, hint, action }) {
  * or a lift, and the fix is to try again rather than to restart the app.
  */
 export function ErrorState({ error, onRetry }) {
+  const t = useT();
   return (
     <EmptyState
       icon="⚠️"
-      title="Не удалось загрузить"
-      hint={error?.detail || error?.message || "Проверь соединение"}
+      title={t("common.error_title")}
+      // The server's own message when there is one: "This code has expired"
+      // is more use than "could not load". It arrives already localised.
+      hint={error?.detail || error?.message || t("common.error_hint")}
       action={
         onRetry ? (
           <Button variant="ghost" onClick={onRetry}>
-            Попробовать снова
+            {t("common.retry")}
           </Button>
         ) : null
       }
@@ -137,16 +141,18 @@ export function Tabs({ value, onChange, options }) {
  * runs down: hours early on, minutes at the end. "0:03:41" would be precise
  * and much harder to read at a glance.
  */
-export function timeLeft(endTime) {
+export function timeLeft(endTime, t) {
   // The API stores naive UTC; without the Z the browser would read it as local
   // time and be wrong by the device's offset.
   const end = new Date(endTime.endsWith("Z") ? endTime : `${endTime}Z`);
   const ms = end.getTime() - Date.now();
-  if (ms <= 0) return "завершён";
+  if (ms <= 0) return t("common.finished");
 
   const minutes = Math.floor(ms / 60000);
-  if (minutes < 60) return `${minutes} мин`;
+  if (minutes < 60) return `${minutes} ${t("common.minutes_short")}`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} ч ${minutes % 60} мин`;
-  return `${Math.floor(hours / 24)} д`;
+  if (hours < 24) {
+    return `${hours} ${t("common.hours_short")} ${minutes % 60} ${t("common.minutes_short")}`;
+  }
+  return `${Math.floor(hours / 24)} ${t("common.days_short")}`;
 }

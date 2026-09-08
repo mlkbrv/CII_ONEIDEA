@@ -14,9 +14,11 @@ import { Link } from "react-router-dom";
 
 import { useFollow, useFollowers, useMe, useSearch } from "../api/queries";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { useT } from "../i18n";
 import { haptic } from "../platform/telegram";
 
 export default function Friends() {
+  const t = useT();
   const [term, setTerm] = useState("");
   const { data: me } = useMe();
   const following = useFollowers(me?.user_id, "following");
@@ -46,10 +48,10 @@ export default function Friends() {
         className="search-input"
         value={term}
         onChange={(event) => setTerm(event.target.value)}
-        placeholder="Найти игрока по имени"
+        placeholder={t("friends.search_placeholder")}
         autoCorrect="off"
         autoCapitalize="none"
-        aria-label="Поиск игроков"
+        aria-label={t("friends.search_placeholder")}
       />
 
       {failed ? (
@@ -65,12 +67,16 @@ export default function Friends() {
         </div>
       ) : rows.length === 0 ? (
         searching ? (
-          <EmptyState icon="🔍" title="Никого не нашли" hint="Попробуй другое имя." />
+          <EmptyState
+            icon="🔍"
+            title={t("friends.nobody_found")}
+            hint={t("friends.nobody_found_hint")}
+          />
         ) : (
           <EmptyState
             icon="👥"
-            title="Ты пока ни на кого не подписан"
-            hint="Найди игроков через поиск — их баттлы появятся в ленте, а их самих можно будет вызвать."
+            title={t("friends.no_following")}
+            hint={t("friends.no_following_hint")}
           />
         )
       ) : (
@@ -88,7 +94,7 @@ export default function Friends() {
               </Link>
               {user.is_following === undefined ? (
                 <Link to={`/u/${user.user_id}`}>
-                  <Button variant="ghost">Открыть</Button>
+                  <Button variant="ghost">{t("common.open")}</Button>
                 </Link>
               ) : (
                 <Button
@@ -96,7 +102,7 @@ export default function Friends() {
                   disabled={follow.isPending}
                   onClick={() => toggleFollow(user)}
                 >
-                  {user.is_following ? "Отписаться" : "Подписаться"}
+                  {t(user.is_following ? "common.unfollow" : "common.follow")}
                 </Button>
               )}
             </Card>

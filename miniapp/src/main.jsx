@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 
 import App from "./App";
 import { signInWithInitData } from "./api/client";
+import { I18nProvider } from "./i18n";
 import { applyTheme, isTelegram } from "./platform/telegram";
 import "./styles.css";
 
@@ -26,7 +27,9 @@ const client = new QueryClient({
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <QueryClientProvider client={client}>
-      <App />
+      <I18nProvider>
+        <App />
+      </I18nProvider>
     </QueryClientProvider>
   </React.StrictMode>
 );

@@ -74,7 +74,7 @@ def list_notifications(
     ).scalars().all()
 
     return NotificationList(
-        items=[_to_read(row) for row in rows],
+        items=[_to_read(row, current_user.language) for row in rows],
         total=total,
         unread=unread,
         limit=limit,
@@ -130,7 +130,7 @@ def mark_read(
         db.commit()
         db.refresh(notification)
 
-    return _to_read(notification)
+    return _to_read(notification, current_user.language)
 
 
 @router.post("/read-all", response_model=UnreadCount)
@@ -151,7 +151,7 @@ def mark_all_read(
     return UnreadCount(unread=0)
 
 
-def _to_read(notification: Notification) -> NotificationRead:
+def _to_read(notification: Notification, language: str | None = None) -> NotificationRead:
     return NotificationRead(
         notification_id=notification.notification_id,
         type=notification.type.type_name,
@@ -159,6 +159,7 @@ def _to_read(notification: Notification) -> NotificationRead:
             notification.type.type_name,
             notification.actor.username if notification.actor else None,
             notification.payload,
+            language,
         ),
         actor_id=notification.actor_user_id,
         actor_username=notification.actor.username if notification.actor else None,

@@ -15,6 +15,8 @@ import { useCallback, useEffect, useState } from "react";
 import { HashRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 
 import { canAuthenticate } from "./api/client";
+import { useMe } from "./api/queries";
+import { useI18n } from "./i18n";
 import Layout from "./components/Layout";
 import { ready, startParam } from "./platform/telegram";
 import Battle from "./screens/Battle";
@@ -44,6 +46,7 @@ export default function App() {
 
   return (
     <HashRouter>
+      <AccountLanguage />
       <DeepLink />
       <Layout>
         <Routes>
@@ -67,6 +70,26 @@ export default function App() {
       </Layout>
     </HashRouter>
   );
+}
+
+/**
+ * Adopts the language stored on the account.
+ *
+ * The app starts in whatever Telegram reports, which is right for a first
+ * visit and wrong for a player who picked something else on another device.
+ * The account is the authority — it is also what the bot writes in — so the
+ * moment /users/me arrives, it wins. Unless the user has already chosen in
+ * this session, in which case the switcher would appear to snap back.
+ */
+function AccountLanguage() {
+  const { data: me } = useMe();
+  const { adoptFromAccount } = useI18n();
+
+  useEffect(() => {
+    if (me?.language) adoptFromAccount(me.language);
+  }, [me?.language, adoptFromAccount]);
+
+  return null;
 }
 
 /**

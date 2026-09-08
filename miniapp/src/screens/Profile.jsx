@@ -16,20 +16,19 @@ import {
   useFollow,
   useMe,
   useProfile,
+  useUpdateMe,
 } from "../api/queries";
 import AvatarView from "../components/AvatarView";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { LANGUAGES, useI18n, useT } from "../i18n";
 import { haptic } from "../platform/telegram";
 
 // TZ section 10: the challenger picks the length.
-const DURATIONS = [
-  { minutes: 30, label: "30 минут" },
-  { minutes: 60, label: "1 час" },
-  { minutes: 360, label: "6 часов" },
-  { minutes: 1440, label: "24 часа" },
-];
+const DURATIONS = [30, 60, 360, 1440];
 
 export default function Profile() {
+  const t = useT();
+  const { language, choose } = useI18n();
   const params = useParams();
   const navigate = useNavigate();
   const { data: me } = useMe();
@@ -39,6 +38,7 @@ export default function Profile() {
   const profile = useProfile(userId);
   const follow = useFollow();
   const challenge = useChallenge();
+  const updateMe = useUpdateMe();
 
   const [challenging, setChallenging] = useState(false);
   const [message, setMessage] = useState(null);
@@ -74,15 +74,12 @@ export default function Profile() {
     try {
       await challenge.mutateAsync({ opponentId: user.user_id, durationMinutes: minutes });
       setChallenging(false);
-      setMessage({ ok: true, text: "Вызов отправлен. Ждём ответа соперника." });
+      setMessage({ ok: true, text: t("profile.challenge_sent") });
       haptic.success();
     } catch (err) {
       setMessage({
         ok: false,
-        text:
-          err.status === 409
-            ? "Один из вас уже участвует в баттле"
-            : err.detail || "Не удалось отправить вызов",
+        text: t(err.status === 409 ? "profile.err_busy" : "profile.err_challenge"),
       });
       haptic.error();
     }
@@ -98,15 +95,15 @@ export default function Profile() {
         <div className="stats">
           <Link to={`/u/${user.user_id}/followers`} className="stat">
             <strong>{user.followers_count}</strong>
-            <span>подписчиков</span>
+            <span>{t("profile.followers")}</span>
           </Link>
           <Link to={`/u/${user.user_id}/following`} className="stat">
             <strong>{user.following_count}</strong>
-            <span>подписок</span>
+            <span>{t("profile.following")}</span>
           </Link>
           <div className="stat">
             <strong>🔥 {user.winning_streak}</strong>
-            <span>серия</span>
+            <span>{t("profile.streak_short")}</span>
           </div>
         </div>
 
@@ -115,17 +112,17 @@ export default function Profile() {
             variant="ghost"
             onClick={() => navigate(`/battle/${user.active_competition_id}`)}
           >
-            ⚔️ Смотреть баттл
+            {t("profile.watch_battle")}
           </Button>
         ) : null}
 
         {user.is_self ? (
           <div className="row-actions">
             <Link to="/wardrobe">
-              <Button variant="ghost">Гардероб</Button>
+              <Button variant="ghost">{t("common.wardrobe")}</Button>
             </Link>
             <Link to="/shop">
-              <Button variant="ghost">Магазин</Button>
+              <Button variant="ghost">{t("common.shop")}</Button>
             </Link>
           </div>
         ) : (
@@ -135,26 +132,26 @@ export default function Profile() {
               onClick={toggleFollow}
               disabled={follow.isPending}
             >
-              {user.is_following ? "Отписаться" : "Подписаться"}
+              {t(user.is_following ? "common.unfollow" : "common.follow")}
             </Button>
             <Button variant="ghost" onClick={() => setChallenging((open) => !open)}>
-              ⚔️ Вызвать
+              {t("profile.challenge")}
             </Button>
           </div>
         )}
 
         {challenging ? (
           <div className="durations">
-            <p className="muted small">Сколько длится баттл?</p>
+            <p className="muted small">{t("profile.duration_question")}</p>
             <div className="row-actions">
-              {DURATIONS.map((option) => (
+              {DURATIONS.map((minutes) => (
                 <Button
-                  key={option.minutes}
+                  key={minutes}
                   variant="ghost"
                   disabled={challenge.isPending}
-                  onClick={() => sendChallenge(option.minutes)}
+                  onClick={() => sendChallenge(minutes)}
                 >
-                  {option.label}
+                  {t(`duration.${minutes}`)}
                 </Button>
               ))}
             </div>
@@ -166,12 +163,39 @@ export default function Profile() {
         ) : null}
       </Card>
 
+      {user.is_self ? (
+        <Card>
+          <p className="muted small">{t("profile.language")}</p>
+          <div className="row-actions">
+            {LANGUAGES.map((option) => (
+              <Button
+                key={option.code}
+                variant={language === option.code ? "primary" : "ghost"}
+                onClick={() => {
+                  // Switch the interface immediately, then tell the server —
+                  // it is what the bot reads when it writes notifications, so
+                  // a failed request would leave the two disagreeing.
+                  choose(option.code);
+                  updateMe.mutate({ language: option.code });
+                }}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
       {user.wardrobe_public || user.is_self ? (
         <Link to={user.is_self ? "/wardrobe" : `/u/${user.user_id}/wardrobe`}>
-          <Card className="link-card">👀 Посмотреть гардероб</Card>
+          <Card className="link-card">{t("profile.view_wardrobe")}</Card>
         </Link>
       ) : (
-        <EmptyState icon="🔒" title="Гардероб скрыт" hint="Этот игрок закрыл свой гардероб." />
+        <EmptyState
+          icon="🔒"
+          title={t("wardrobe.hidden")}
+          hint={t("profile.wardrobe_private")}
+        />
       )}
     </div>
   );

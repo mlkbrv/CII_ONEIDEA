@@ -29,6 +29,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.main import app
 from app.models import AuthProvider, AuthProviderType, Avatar, User
+from app.services.notifications import NEW_FOLLOWER, render
 
 # Starlette emits this when a TestClient is constructed, not when it is
 # imported, so the filter is installed here rather than above the imports.
@@ -116,6 +117,7 @@ def sign_widget(user, auth_date=None, token=None) -> dict:
 
 
 def tg_user(telegram_id: int, first_name: str = "Test", **extra) -> dict:
+    """Telegram's user object; **extra carries username, language_code, ..."""
     return {"id": telegram_id, "first_name": first_name, **extra}
 
 
@@ -501,6 +503,78 @@ results.append(
     )
 )
 
+
+# --- 10. Language ----------------------------------------------------------
+# The bot writes notifications from a sweeper thread, so the language has to
+# be on the account rather than inferred per request.
+TG_AZ = TG_MAIN + 6
+ALL_TELEGRAM_IDS.append(TG_AZ)
+
+client.post(
+    "/auth/telegram",
+    json={
+        "init_data": sign_init_data(
+            tg_user(TG_AZ, first_name="Elvin", language_code="az-AZ")
+        )
+    },
+)
+user = load_user(TG_AZ)
+results.append((
+    "Telegram's language is stored on the account",
+    user is not None and user.language == "az",
+    user.language if user else "-",
+))
+
+client.post(
+    "/auth/telegram",
+    json={
+        "init_data": sign_init_data(
+            tg_user(TG_AZ, first_name="Elvin", language_code="fr")
+        )
+    },
+)
+results.append((
+    "an unsupported Telegram language does not overwrite the stored one",
+    load_user(TG_AZ).language == "az",
+    load_user(TG_AZ).language,
+))
+
+with SessionLocal() as db:
+    row = db.execute(select(User).where(User.telegram_id == TG_AZ)).scalar_one()
+    row.language = "en"
+    db.commit()
+
+client.post(
+    "/auth/telegram",
+    json={
+        "init_data": sign_init_data(
+            tg_user(TG_AZ, first_name="Elvin", language_code="az")
+        )
+    },
+)
+results.append((
+    "a language chosen in the app survives the next Telegram sign-in",
+    load_user(TG_AZ).language == "en",
+    load_user(TG_AZ).language,
+))
+
+# The notification text the bot would send, in each language.
+rendered = {
+    lang: render(NEW_FOLLOWER, "Uzeir", None, lang) for lang in ("ru", "en", "az")
+}
+results.append((
+    "the same notification renders differently per language",
+    len(set(rendered.values())) == 3,
+    # The texts themselves are not printed: they contain emoji, and a Windows
+    # console redirected to a file encodes as cp1251, which cannot represent
+    # them — the report would crash instead of reporting.
+    f"{len(set(rendered.values()))} distinct",
+))
+results.append((
+    "an unknown language falls back rather than showing a key",
+    render(NEW_FOLLOWER, "Uzeir", None, "fr") == rendered["ru"],
+    "",
+))
 
 try:
     failed = 0

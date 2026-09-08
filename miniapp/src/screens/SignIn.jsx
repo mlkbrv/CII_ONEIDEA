@@ -13,10 +13,12 @@ import { useEffect, useRef, useState } from "react";
 
 import { api, signInWithWidget } from "../api/client";
 import { Button, Card } from "../components/ui";
+import { useT } from "../i18n";
 
 const CALLBACK = "onTelegramAuth";
 
 export default function SignIn({ onSignedIn }) {
+  const t = useT();
   const holder = useRef(null);
   const [config, setConfig] = useState(null);
   const [error, setError] = useState(null);
@@ -42,7 +44,7 @@ export default function SignIn({ onSignedIn }) {
         await signInWithWidget(data);
         onSignedIn();
       } catch (err) {
-        setError(err.detail || "Не удалось войти");
+        setError(err.detail || t("signin.failed"));
       }
     };
 
@@ -61,7 +63,7 @@ export default function SignIn({ onSignedIn }) {
       node.replaceChildren();
       delete window[CALLBACK];
     };
-  }, [config, onSignedIn]);
+  }, [config, onSignedIn, t]);
 
   return (
     <div className="screen signin">
@@ -70,27 +72,22 @@ export default function SignIn({ onSignedIn }) {
           🐻‍❄️
         </div>
         <h1 className="screen-title">Cola Fest</h1>
-        <p className="muted">
-          Собирай монеты с крышек, одевай своего медведя и вызывай друзей на баттл
-          образов.
-        </p>
+        <p className="muted">{t("signin.tagline")}</p>
 
         {config === null ? (
-          <p className="muted small">Загружаем…</p>
+          <p className="muted small">{t("common.loading")}</p>
         ) : config.bot_username ? (
           <>
-            <p className="muted small">Войди через Telegram, чтобы начать:</p>
+            <p className="muted small">{t("signin.prompt")}</p>
             <div ref={holder} className="signin-widget" />
           </>
         ) : (
-          <p className="status status-err">
-            Вход через браузер не настроен. Открой приложение из Telegram.
-          </p>
+          <p className="status status-err">{t("signin.not_configured")}</p>
         )}
 
         {config?.webapp_url ? (
           <Button variant="ghost" onClick={() => window.open(config.webapp_url, "_blank")}>
-            Открыть в Telegram
+            {t("signin.open_in_telegram")}
           </Button>
         ) : null}
 

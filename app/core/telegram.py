@@ -64,6 +64,10 @@ class TelegramUser:
     last_name: str | None = None
     username: str | None = None
     photo_url: str | None = None
+    # Telegram's own UI language for this user, e.g. "ru", "en", "az-AZ".
+    # Used to pick the language of the app and of the bot's messages on first
+    # contact, before the user has expressed a preference of their own.
+    language_code: str | None = None
 
 
 def validate_init_data(init_data: str) -> TelegramUser:
@@ -168,6 +172,7 @@ def _to_user(raw: dict[str, Any]) -> TelegramUser:
         last_name=_optional_str(raw.get("last_name")),
         username=_optional_str(raw.get("username")),
         photo_url=_optional_str(raw.get("photo_url")),
+        language_code=_optional_str(raw.get("language_code")),
     )
 
 

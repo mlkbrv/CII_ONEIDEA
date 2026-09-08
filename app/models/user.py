@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, CheckConstraint, text
+from sqlalchemy import BigInteger, CheckConstraint, String, text
 from sqlalchemy.dialects.postgresql import CITEXT, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -81,6 +81,14 @@ class User(Base):
     telegram_username: Mapped[str | None] = mapped_column(nullable=True)
     first_name: Mapped[str | None] = mapped_column(nullable=True)
     last_name: Mapped[str | None] = mapped_column(nullable=True)
+
+    # Which language this account reads. Seeded from Telegram on first
+    # contact and changeable in the app afterwards; the bot needs it because
+    # it composes messages server-side, long after any request context is
+    # gone. Two letters, lowercase — see app/services/i18n.py.
+    language: Mapped[str] = mapped_column(
+        String(2), nullable=False, server_default=text("'ru'")
+    )
 
     profile_picture_url: Mapped[str | None] = mapped_column(nullable=True)
     biography: Mapped[str | None] = mapped_column(nullable=True)

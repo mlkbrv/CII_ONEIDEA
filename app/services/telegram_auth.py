@@ -26,6 +26,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.telegram import TelegramUser
+from app.services.i18n import normalise_language
 from app.models import AuthProvider, AuthProviderType, Avatar, User
 
 logger = logging.getLogger(__name__)
@@ -86,6 +87,7 @@ def _create_telegram_user(db: Session, telegram_user: TelegramUser) -> User:
         first_name=telegram_user.first_name,
         last_name=telegram_user.last_name,
         profile_picture_url=telegram_user.photo_url,
+        language=normalise_language(telegram_user.language_code),
     )
     # Avatar(user=user) lets SQLAlchemy resolve the FK after the users INSERT,
     # so no id is generated client-side and both rows land in one flush.
@@ -112,7 +114,8 @@ def _refresh_telegram_profile(
     may have renamed themselves in the app; overwriting it whenever they
     change their @handle in Telegram would undo that silently. Same for
     profile_picture_url once the user has set one of their own: we only fill
-    it in while it is still empty.
+    it in while it is still empty, and for `language`, which the user can
+    change in the app — Telegram's client language must not keep resetting it.
     """
     changed = False
 

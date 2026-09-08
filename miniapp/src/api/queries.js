@@ -149,6 +149,16 @@ export function useRedeemCode() {
   });
 }
 
+export function useUpdateMe() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (patch) => api("/users/me", { method: "PATCH", body: patch }),
+    // The profile screen renders from /users/{id}, not /users/me, so both
+    // have to be refreshed or a changed username stays stale on screen.
+    onSuccess: () => invalidate(client, ["me", "profile"]),
+  });
+}
+
 export function usePurchase() {
   const client = useQueryClient();
   return useMutation({

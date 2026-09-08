@@ -1,12 +1,12 @@
 /*
  * Battles — the two views TZ section 14 asks for.
  *
- * "Мои" holds anything involving the player: incoming challenges they have to
- * answer, challenges they sent, and their live battle. Incoming requests sit
- * at the top because they are the only thing here that is blocked on the user
- * doing something.
+ * "Mine" holds anything involving the player: incoming challenges they have
+ * to answer, challenges they sent, and their live battle. Incoming requests
+ * sit at the top because they are the only thing here that is blocked on the
+ * user doing something.
  *
- * "Другие" is the feed of battles from people they follow, which is where the
+ * "Others" is the feed of battles from people they follow, which is where the
  * voting economy lives (TZ section 15).
  */
 import { useState } from "react";
@@ -19,9 +19,11 @@ import {
   useRespondToRequest,
 } from "../api/queries";
 import { Button, Card, EmptyState, ErrorState, Skeleton, Tabs, timeLeft } from "../components/ui";
+import { useT } from "../i18n";
 import { haptic } from "../platform/telegram";
 
 export default function Battles() {
+  const t = useT();
   const [tab, setTab] = useState("mine");
 
   return (
@@ -30,8 +32,8 @@ export default function Battles() {
         value={tab}
         onChange={setTab}
         options={[
-          { value: "mine", label: "Мои" },
-          { value: "others", label: "Другие" },
+          { value: "mine", label: t("battles.mine") },
+          { value: "others", label: t("battles.others") },
         ]}
       />
       {tab === "mine" ? <MyBattles /> : <OtherBattles />}
@@ -40,6 +42,7 @@ export default function Battles() {
 }
 
 function MyBattles() {
+  const t = useT();
   const navigate = useNavigate();
   const incoming = useRequests("incoming");
   const outgoing = useRequests("outgoing");
@@ -53,11 +56,7 @@ function MyBattles() {
       await respond.mutateAsync({ requestId, action });
       haptic.success();
     } catch (err) {
-      setError(
-        err.status === 409
-          ? "Кто-то из вас уже в баттле — этот вызов больше не действителен"
-          : err.detail || "Не удалось ответить на вызов"
-      );
+      setError(t(err.status === 409 ? "battles.err_conflict" : "battles.err_generic"));
       haptic.error();
     }
   }
@@ -81,11 +80,11 @@ function MyBattles() {
     return (
       <EmptyState
         icon="⚔️"
-        title="Пока пусто"
-        hint="Вызови кого-нибудь на баттл образов — победитель забирает весь призовой фонд."
+        title={t("battles.empty")}
+        hint={t("battles.empty_hint")}
         action={
           <Link to="/friends">
-            <Button variant="ghost">К друзьям</Button>
+            <Button variant="ghost">{t("battles.to_friends")}</Button>
           </Link>
         }
       />
@@ -98,20 +97,18 @@ function MyBattles() {
 
       {pendingIn.map((request) => (
         <Card key={request.request_id} className="request">
-          <p>
-            <strong>{request.challenger.username}</strong> вызывает тебя на баттл
-          </p>
-          <p className="muted small">{humanDuration(request.duration_minutes)}</p>
+          <p>{t("battles.challenges_you", { username: request.challenger.username })}</p>
+          <p className="muted small">{t(`duration.${request.duration_minutes}`)}</p>
           <div className="row-actions">
             <Button disabled={respond.isPending} onClick={() => answer(request.request_id, "accept")}>
-              Принять
+              {t("battles.accept")}
             </Button>
             <Button
               variant="ghost"
               disabled={respond.isPending}
               onClick={() => answer(request.request_id, "decline")}
             >
-              Отклонить
+              {t("battles.decline")}
             </Button>
           </div>
         </Card>
@@ -124,14 +121,14 @@ function MyBattles() {
       {pendingOut.map((request) => (
         <Card key={request.request_id} className="request">
           <p className="muted">
-            Ты вызвал <strong>{request.opponent.username}</strong> — ждём ответа
+            {t("battles.you_challenged", { username: request.opponent.username })}
           </p>
           <Button
             variant="ghost"
             disabled={respond.isPending}
             onClick={() => answer(request.request_id, "cancel")}
           >
-            Отменить вызов
+            {t("battles.cancel_challenge")}
           </Button>
         </Card>
       ))}
@@ -140,6 +137,7 @@ function MyBattles() {
 }
 
 function OtherBattles() {
+  const t = useT();
   const navigate = useNavigate();
   const [scope, setScope] = useState("following");
   const discover = useDiscover(scope);
@@ -154,8 +152,8 @@ function OtherBattles() {
         value={scope}
         onChange={setScope}
         options={[
-          { value: "following", label: "Мои подписки" },
-          { value: "all", label: "Все" },
+          { value: "following", label: t("battles.my_subscriptions") },
+          { value: "all", label: t("battles.all") },
         ]}
       />
       {discover.isLoading ? (
@@ -167,12 +165,14 @@ function OtherBattles() {
       ) : battles.length === 0 ? (
         <EmptyState
           icon="🍿"
-          title={scope === "following" ? "У твоих подписок нет баттлов" : "Сейчас никто не сражается"}
-          hint={
+          title={t(
+            scope === "following" ? "battles.none_following" : "battles.none_at_all"
+          )}
+          hint={t(
             scope === "following"
-              ? "Подпишись на больше игроков или посмотри все баттлы."
-              : "Загляни позже — или начни свой."
-          }
+              ? "battles.none_following_hint"
+              : "battles.none_at_all_hint"
+          )}
         />
       ) : (
         <div className="list">
@@ -186,6 +186,7 @@ function OtherBattles() {
 }
 
 function BattleCard({ battle, onOpen, live = false }) {
+  const t = useT();
   return (
     <Card className="battle-card" onClick={() => onOpen(`/battle/${battle.competition_id}`)}>
       <div className="battle-row">
@@ -196,17 +197,12 @@ function BattleCard({ battle, onOpen, live = false }) {
         <span className="side">{battle.opponent.username}</span>
       </div>
       <p className="muted small">
-        {live ? "Твой баттл · " : ""}
-        Приз: {battle.prize_pool} 🪙 · осталось {timeLeft(battle.end_time)}
+        {live ? t("battles.mine_prefix") : ""}
+        {t("battles.card_meta", {
+          prize: battle.prize_pool,
+          time: timeLeft(battle.end_time, t),
+        })}
       </p>
     </Card>
   );
-}
-
-function humanDuration(minutes) {
-  if (minutes < 60) return `${minutes} минут`;
-  const hours = minutes / 60;
-  if (hours === 1) return "1 час";
-  if (hours < 5) return `${hours} часа`;
-  return `${hours} часов`;
 }

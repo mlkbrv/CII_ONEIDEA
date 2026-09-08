@@ -27,6 +27,8 @@ const BASE = "/media/avatar/base.svg";
  */
 export default function AvatarView({ equipment, preview, size = "100%", className = "" }) {
   const worn = { ...(equipment || {}) };
+  // The bear itself is decorative: what matters to a screen reader is which
+  // garments are on it, and each of those carries its own name below.
 
   if (preview) {
     const slot = preview.category?.slot;
@@ -36,7 +38,7 @@ export default function AvatarView({ equipment, preview, size = "100%", classNam
   return (
     <div className={`avatar ${className}`} style={{ width: size }}>
       <img src={BASE_BACK} alt="" aria-hidden="true" />
-      <img src={BASE} alt="Аватар" />
+      <img src={BASE} alt="" aria-hidden="true" />
       {SLOT_ORDER.map((slot) => {
         const item = worn[slot]?.item;
         if (!item) return null;

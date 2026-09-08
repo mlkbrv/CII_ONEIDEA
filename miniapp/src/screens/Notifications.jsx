@@ -14,6 +14,7 @@ import { useNavigate } from "react-router-dom";
 
 import { useMarkAllRead, useNotifications } from "../api/queries";
 import { Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { useI18n, useT } from "../i18n";
 
 // Which notifications lead somewhere, and where.
 function destinationOf(notification) {
@@ -25,7 +26,9 @@ function destinationOf(notification) {
 }
 
 export default function Notifications() {
+  const t = useT();
   const navigate = useNavigate();
+  const { language } = useI18n();
   const feed = useNotifications();
   const markAllRead = useMarkAllRead();
 
@@ -42,7 +45,7 @@ export default function Notifications() {
 
   return (
     <div className="screen notifications">
-      <h1 className="screen-title">Уведомления</h1>
+      <h1 className="screen-title">{t("notifications.title")}</h1>
 
       {feed.isLoading ? (
         <div className="list">
@@ -53,8 +56,8 @@ export default function Notifications() {
       ) : items.length === 0 ? (
         <EmptyState
           icon="🔔"
-          title="Пока тихо"
-          hint="Здесь появятся вызовы на баттлы, результаты и новые подписчики."
+          title={t("notifications.empty")}
+          hint={t("notifications.empty_hint")}
         />
       ) : (
         <div className="list">
@@ -69,7 +72,7 @@ export default function Notifications() {
                 onClick={to ? () => navigate(to) : undefined}
               >
                 <p>{notification.message}</p>
-                <p className="muted small">{formatWhen(notification.created_at)}</p>
+                <p className="muted small">{formatWhen(notification.created_at, t, language)}</p>
               </Card>
             );
           })}
@@ -79,16 +82,17 @@ export default function Notifications() {
   );
 }
 
-function formatWhen(value) {
+function formatWhen(value, t, language) {
   // Stored naive UTC; without the Z the browser reads it as local time and is
   // wrong by the device's offset — which for a "2 minutes ago" label shows up
   // immediately as "in 3 hours".
   const when = new Date(value.endsWith("Z") ? value : `${value}Z`);
   const minutes = Math.round((Date.now() - when.getTime()) / 60000);
 
-  if (minutes < 1) return "только что";
-  if (minutes < 60) return `${minutes} мин назад`;
+  if (minutes < 1) return t("time.just_now");
+  if (minutes < 60) return t("time.minutes_ago", { count: minutes });
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} ч назад`;
-  return when.toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
+  if (hours < 24) return t("time.hours_ago", { count: hours });
+  // Older than a day: the browser knows how each locale writes a date.
+  return when.toLocaleDateString(language, { day: "numeric", month: "long" });
 }

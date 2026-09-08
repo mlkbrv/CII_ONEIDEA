@@ -35,7 +35,6 @@ from aiogram.types import BotCommand, MenuButtonWebApp, WebAppInfo
 
 from app.bot.delivery import run_delivery_loop
 from app.bot.handlers import router as bot_router
-from app.bot.handlers import webapp_keyboard
 from app.core.config import settings
 from app.services.competition_expiration import run_expiration_sweeper
 from app.services.reminders import sweep_ending_soon
@@ -46,11 +45,41 @@ logging.basicConfig(
 )
 logger = logging.getLogger("cci.worker")
 
-COMMANDS = [
-    BotCommand(command="start", description="Открыть Cola Fest"),
-    BotCommand(command="redeem", description="Активировать код с крышки"),
-    BotCommand(command="me", description="Баланс и серия побед"),
-]
+# The command list Telegram shows in the chat's menu, per language. Telegram
+# stores one list per language_code and falls back to the default (None) for
+# anything not listed, which is why the Russian set is registered twice.
+COMMANDS = {
+    None: [
+        ("start", "Открыть Cola Fest"),
+        ("redeem", "Активировать код с крышки"),
+        ("me", "Баланс и серия побед"),
+    ],
+    "ru": [
+        ("start", "Открыть Cola Fest"),
+        ("redeem", "Активировать код с крышки"),
+        ("me", "Баланс и серия побед"),
+    ],
+    "en": [
+        ("start", "Open Cola Fest"),
+        ("redeem", "Redeem a code from a cap"),
+        ("me", "Balance and winning streak"),
+    ],
+    "az": [
+        ("start", "Cola Fest-i aç"),
+        ("redeem", "Qapaqdakı kodu aktivləşdir"),
+        ("me", "Balans və qalibiyyət seriyası"),
+    ],
+}
+
+
+async def _register_commands(bot: Bot) -> None:
+    """Publish the command menu in every language we speak."""
+    for language_code, commands in COMMANDS.items():
+        await bot.set_my_commands(
+            [BotCommand(command=name, description=text) for name, text in commands],
+            language_code=language_code,
+        )
+    logger.info("Command menu published in %d language(s)", len(COMMANDS) - 1)
 
 
 def run_reminder_sweeper(stop_event: threading.Event, interval_seconds: int) -> None:
@@ -88,7 +117,7 @@ async def run_bot(stop_event: threading.Event) -> None:
         me = await bot.get_me()
         logger.info("Telegram bot authorised as @%s", me.username)
 
-        await bot.set_my_commands(COMMANDS)
+        await _register_commands(bot)
         await _configure_menu_button(bot)
 
         # Drop anything queued while the worker was down: a stale "your battle
@@ -101,11 +130,7 @@ async def run_bot(stop_event: threading.Event) -> None:
         dispatcher.include_router(bot_router)
 
         delivery = asyncio.create_task(
-            run_delivery_loop(
-                bot,
-                settings.notification_poll_interval_seconds,
-                webapp_keyboard(),
-            )
+            run_delivery_loop(bot, settings.notification_poll_interval_seconds)
         )
         try:
             await dispatcher.start_polling(bot, handle_signals=False)

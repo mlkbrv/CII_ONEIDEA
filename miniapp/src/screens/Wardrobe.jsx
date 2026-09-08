@@ -16,18 +16,11 @@ import { Link } from "react-router-dom";
 import { useEquip, useMyAvatar, useWardrobe } from "../api/queries";
 import AvatarView, { ItemThumb } from "../components/AvatarView";
 import { Button, Card, EmptyState, ErrorState, Skeleton, Tabs } from "../components/ui";
+import { useT } from "../i18n";
 import { haptic } from "../platform/telegram";
 
-const SLOT_LABELS = {
-  hair: "Причёски",
-  hat: "Головные уборы",
-  top: "Верх",
-  bottom: "Низ",
-  shoes: "Обувь",
-  accessory: "Аксессуары",
-};
-
 export default function Wardrobe() {
+  const t = useT();
   const [slot, setSlot] = useState(null);
   const wardrobe = useWardrobe();
   const { data: avatar } = useMyAvatar();
@@ -47,8 +40,8 @@ export default function Wardrobe() {
   const entries = wardrobe.data?.items ?? [];
   const slots = useMemo(() => {
     const present = new Set(entries.map((entry) => entry.item.category.slot));
-    return [...present].map((value) => ({ value, label: SLOT_LABELS[value] ?? value }));
-  }, [entries]);
+    return [...present].map((value) => ({ value, label: t(`slot.${value}`) }));
+  }, [entries, t]);
 
   const visible = entries.filter((entry) => slot === null || entry.item.category.slot === slot);
 
@@ -81,11 +74,11 @@ export default function Wardrobe() {
       ) : entries.length === 0 ? (
         <EmptyState
           icon="🎽"
-          title="Гардероб пуст"
-          hint="Активируй код с крышки, чтобы получить монеты, и загляни в магазин."
+          title={t("wardrobe.empty")}
+          hint={t("wardrobe.empty_hint")}
           action={
             <Link to="/shop">
-              <Button variant="ghost">В магазин</Button>
+              <Button variant="ghost">{t("wardrobe.to_shop")}</Button>
             </Link>
           }
         />
@@ -94,7 +87,7 @@ export default function Wardrobe() {
           <Tabs
             value={slot}
             onChange={setSlot}
-            options={[{ value: null, label: "Всё" }, ...slots]}
+            options={[{ value: null, label: t("wardrobe.all") }, ...slots]}
           />
           <div className="grid">
             {visible.map((entry) => {
@@ -108,7 +101,9 @@ export default function Wardrobe() {
                 >
                   <ItemThumb item={entry.item} />
                   <span className="tile-name">{entry.item.name}</span>
-                  <span className="tile-price">{worn ? "Снять" : "Надеть"}</span>
+                  <span className="tile-price">
+                    {worn ? t("wardrobe.unequip") : t("wardrobe.equip")}
+                  </span>
                 </button>
               );
             })}

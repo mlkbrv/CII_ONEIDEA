@@ -14,8 +14,10 @@ import { useParams } from "react-router-dom";
 import { useProfile, useUserWardrobe } from "../api/queries";
 import { ItemThumb } from "../components/AvatarView";
 import { Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
+import { useT } from "../i18n";
 
 export default function UserWardrobe() {
+  const t = useT();
   const { userId } = useParams();
   const profile = useProfile(userId);
   const wardrobe = useUserWardrobe(userId);
@@ -24,8 +26,8 @@ export default function UserWardrobe() {
     return (
       <EmptyState
         icon="🔒"
-        title="Гардероб скрыт"
-        hint="Этот игрок не открывает свой гардероб."
+        title={t("wardrobe.hidden")}
+        hint={t("wardrobe.hidden_hint")}
       />
     );
   }
@@ -35,7 +37,9 @@ export default function UserWardrobe() {
 
   return (
     <div className="screen wardrobe">
-      <h1 className="screen-title">Гардероб {profile.data?.username ?? ""}</h1>
+      <h1 className="screen-title">
+        {t("wardrobe.of", { username: profile.data?.username ?? "" })}
+      </h1>
 
       {wardrobe.isLoading ? (
         <div className="grid">
@@ -44,7 +48,7 @@ export default function UserWardrobe() {
           ))}
         </div>
       ) : items.length === 0 ? (
-        <EmptyState icon="🎽" title="Тут пока пусто" />
+        <EmptyState icon="🎽" title={t("wardrobe.empty_other")} />
       ) : (
         <div className="grid">
           {items.map((entry) => (

@@ -7,6 +7,7 @@ exposed — anything not listed here, such as password_hash, is stripped
 from the response by FastAPI's response_model filtering.
 """
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -55,6 +56,21 @@ class UserUpdate(BaseModel):
         max_length=2048,
         description="Public URL of the profile picture",
     )
+    # Once set here it stops following the Telegram client's language: a
+    # deliberate choice must not be undone by the next sign-in.
+    language: Literal["ru", "en", "az"] | None = Field(
+        default=None,
+        description="Interface and notification language",
+    )
+
+    @field_validator("language")
+    @classmethod
+    def language_must_not_be_null(cls, value: str | None) -> str | None:
+        # Same reasoning as username below: the column is NOT NULL, and an
+        # explicit null would reach the database and 500 instead of 422.
+        if value is None:
+            raise ValueError("language may not be null")
+        return value
 
     @field_validator("username")
     @classmethod
@@ -78,6 +94,7 @@ class UserRead(BaseModel):
     biography: str | None = None
     profile_picture_url: str | None = None
     is_active: bool
+    language: str
     created_at: datetime
 
 

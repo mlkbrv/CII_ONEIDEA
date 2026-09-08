@@ -15,9 +15,11 @@ import { Link, useParams } from "react-router-dom";
 import { useCoins, useCompetition, useMe, useVote } from "../api/queries";
 import AvatarView from "../components/AvatarView";
 import { Button, Card, ErrorState, Skeleton, timeLeft } from "../components/ui";
+import { useT } from "../i18n";
 import { haptic } from "../platform/telegram";
 
 export default function Battle() {
+  const t = useT();
   const { competitionId } = useParams();
   const battle = useCompetition(competitionId);
   const { data: me } = useMe();
@@ -49,11 +51,13 @@ export default function Battle() {
       haptic.success();
     } catch (err) {
       setError(
-        {
-          400: "Не хватает монет — один голос стоит 1 монету",
-          403: "Участники не голосуют в своём баттле",
-          409: "Ты уже голосовал в этом баттле",
-        }[err.status] || err.detail || "Не удалось проголосовать"
+        t(
+          {
+            400: "battle.err_funds",
+            403: "battle.err_participant",
+            409: "battle.err_voted",
+          }[err.status] || "battle.err_generic"
+        )
       );
       haptic.error();
     }
@@ -62,15 +66,19 @@ export default function Battle() {
   return (
     <div className="screen battle">
       <Card className="battle-header">
-        <p className="eyebrow">{finished ? "Баттл завершён" : "🔥 Идёт баттл"}</p>
+        <p className="eyebrow">{t(finished ? "battle.finished" : "battle.running")}</p>
         <p className="battle-score big">
           <strong>{data.challenger_votes}</strong>
           <span>:</span>
           <strong>{data.opponent_votes}</strong>
         </p>
         <p className="muted">
-          Призовой фонд: {data.prize_pool} 🪙
-          {finished ? "" : ` · осталось ${timeLeft(data.end_time)}`}
+          {finished
+            ? t("battle.prize_pool", { prize: data.prize_pool })
+            : t("battle.prize_and_time", {
+                prize: data.prize_pool,
+                time: timeLeft(data.end_time, t),
+              })}
         </p>
       </Card>
 
@@ -100,42 +108,39 @@ export default function Battle() {
         <Card className="battle-result">
           {data.winner_id ? (
             <p>
-              🏆 Победил{" "}
-              <strong>
-                {data.winner_id === data.challenger.user_id
-                  ? data.challenger.username
-                  : data.opponent.username}
-              </strong>{" "}
-              и забрал {data.prize_pool} 🪙
+              {t("battle.winner", {
+                username:
+                  data.winner_id === data.challenger.user_id
+                    ? data.challenger.username
+                    : data.opponent.username,
+                prize: data.prize_pool,
+              })}
             </p>
           ) : (
-            <p>🤝 Ничья — призовой фонд поделён поровну</p>
+            <p>{t("battle.draw")}</p>
           )}
         </Card>
       ) : isParticipant ? (
-        <Card className="muted">
-          Это твой баттл. Зови подписчиков голосовать — каждый голос добавляет монету
-          в призовой фонд.
-        </Card>
+        <Card className="muted">{t("battle.yours")}</Card>
       ) : alreadyVoted ? (
-        <Card className="muted">Ты уже отдал свой голос в этом баттле.</Card>
+        <Card className="muted">{t("battle.already_voted")}</Card>
       ) : (
         <div className="vote-actions">
           <Button
             disabled={vote.isPending || (coins?.balance ?? 0) < 1}
             onClick={() => castVote(data.challenger.user_id)}
           >
-            За {data.challenger.username} · 1 🪙
+            {t("battle.vote_for", { username: data.challenger.username })}
           </Button>
           <Button
             disabled={vote.isPending || (coins?.balance ?? 0) < 1}
             onClick={() => castVote(data.opponent.user_id)}
           >
-            За {data.opponent.username} · 1 🪙
+            {t("battle.vote_for", { username: data.opponent.username })}
           </Button>
           {(coins?.balance ?? 0) < 1 ? (
             <p className="muted small">
-              Нужна хотя бы одна монета. <Link to="/scan">Активируй код с крышки</Link>.
+              {t("battle.need_coin")} <Link to="/scan">{t("battle.get_coins")}</Link>
             </p>
           ) : null}
         </div>
@@ -147,6 +152,7 @@ export default function Battle() {
 }
 
 function Side({ user, avatar, votes, total, winner, chosen }) {
+  const t = useT();
   // The bar is the share of the vote, so the fight is legible at a glance
   // rather than requiring arithmetic on two numbers.
   const share = total > 0 ? Math.round((votes / total) * 100) : 50;
@@ -162,9 +168,7 @@ function Side({ user, avatar, votes, total, winner, chosen }) {
       <div className="bar" aria-hidden="true">
         <span style={{ width: `${share}%` }} />
       </div>
-      <p className="muted small">
-        {votes} голосов · {share}%
-      </p>
+      <p className="muted small">{t("battle.votes_share", { votes, share })}</p>
     </div>
   );
 }

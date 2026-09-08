@@ -14,8 +14,10 @@ import { Link } from "react-router-dom";
 
 import { useLeaderboard } from "../api/queries";
 import { Card, EmptyState, ErrorState, Skeleton, Tabs } from "../components/ui";
+import { useT } from "../i18n";
 
 export default function Leaderboard() {
+  const t = useT();
   const [metric, setMetric] = useState("streak");
   const board = useLeaderboard(metric);
 
@@ -31,8 +33,8 @@ export default function Leaderboard() {
         value={metric}
         onChange={setMetric}
         options={[
-          { value: "streak", label: "🔥 Серия" },
-          { value: "wins", label: "🏆 Победы" },
+          { value: "streak", label: t("leaderboard.streak") },
+          { value: "wins", label: t("leaderboard.wins") },
         ]}
       />
 
@@ -43,7 +45,11 @@ export default function Leaderboard() {
           ))}
         </div>
       ) : rows.length === 0 ? (
-        <EmptyState icon="🏆" title="Таблица пуста" hint="Пока никто не сражался." />
+        <EmptyState
+          icon="🏆"
+          title={t("leaderboard.empty")}
+          hint={t("leaderboard.empty_hint")}
+        />
       ) : (
         <div className="list">
           {rows.map((row) => (
@@ -54,7 +60,7 @@ export default function Leaderboard() {
 
       {me && !meOnPage ? (
         <div className="pinned-me">
-          <p className="muted small">Ты сейчас здесь</p>
+          <p className="muted small">{t("leaderboard.you_are_here")}</p>
           <Row row={me} metric={metric} />
         </div>
       ) : null}
