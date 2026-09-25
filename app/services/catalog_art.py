@@ -110,6 +110,37 @@ def validate(svg_text: str) -> str:
     if "<!doctype" in lowered or "<!entity" in lowered:
         raise ArtError("Remove the DOCTYPE / ENTITY declaration; send the <svg> element alone.")
 
+    # Processing instructions and comments are also checked on the raw text,
+    # for the same reason: ElementTree silently drops both while parsing, so
+    # neither ever reaches the element walk below — yet write() below saves
+    # this same raw text verbatim. A "<?xml-stylesheet href=...?>" pointing at
+    # an external file would therefore sail through every check here and land
+    # on disk untouched, then get followed by any browser that opens the SVG
+    # directly (not through an <img> tag, where this cannot fire, but the
+    # file is also reachable on its own via /media/uploads/...). An ordinary
+    # `<?xml version="1.0"?>` declaration is common enough from real editors
+    # to carve out explicitly rather than reject every submission that has one.
+    # `\s` right after `xml` is what distinguishes the real declaration
+    # (`<?xml version="1.0"?>`) from a same-prefixed PI target like
+    # `<?xml-stylesheet ...?>` — the XML spec requires that whitespace before
+    # VersionInfo, and no other PI target may literally be "xml" case-
+    # insensitively, but "xml-stylesheet" is a different target name, not a
+    # variant of the declaration. Without the `\s`, `<?xml-stylesheet ...?>`
+    # would match here and be stripped as if it were the harmless case.
+    without_xml_declaration = re.sub(r"^\s*<\?xml\s[^?]*\?>", "", svg_text, count=1)
+    if "<?" in without_xml_declaration:
+        raise ArtError(
+            "Remove processing instructions (e.g. <?xml-stylesheet ...?>). "
+            "The parser drops them silently, so anything hidden in one would "
+            "be written to disk without ever being checked."
+        )
+    if "<!--" in svg_text:
+        raise ArtError(
+            "Remove XML comments. The parser drops them silently, so "
+            "anything hidden in one would be written to disk without ever "
+            "being checked."
+        )
+
     try:
         root = SafeElementTree.fromstring(svg_text)
     except ParseError as exc:
@@ -148,6 +179,22 @@ def validate(svg_text: str) -> str:
                     "filters must be defined in the same file and referenced by #id."
                 )
 
+        # <style> carries CSS as element TEXT, not attributes — the loop
+        # above never looks at it, so a url()/@import here would otherwise
+        # sail through unchecked the same way a raw processing instruction
+        # did before the check above this function.
+        if tag == "style" and element.text:
+            style_text = element.text.lower()
+            if "@import" in style_text:
+                raise ArtError("<style> may not use @import.")
+            for match in re.finditer(r"url\(\s*['\"]?([^'\")]*)", element.text, re.IGNORECASE):
+                if not match.group(1).strip().startswith("#"):
+                    raise ArtError(
+                        "<style> may not reference an external url(). Define "
+                        "gradients and filters in the same file and reference "
+                        "them by #id."
+                    )
+
     return svg_text
 
 
@@ -166,12 +213,46 @@ def thumbnail(svg_text: str, slot: str) -> str:
     )
 
 
-def write(slot: str, slug: str, svg_text: str) -> str:
-    """Write the layer and its thumbnail. Returns the public image URL."""
+class SlugTakenError(ArtError):
+    """`write()` was asked to create a file that already exists.
+
+    `_free_slug()` in the router picks a slug by querying the database, and
+    two concurrent POSTs can both query before either has committed — both
+    then land on the same slug and would otherwise clobber each other's file
+    on disk (a plain write is not atomic, so the loser's picture silently
+    replaces the winner's, even though the database ends up with two distinct
+    rows). Raised only when creating; PATCH intentionally overwrites its own
+    item's file, and passes overwrite=True to say so.
+    """
+
+
+def write(slot: str, slug: str, svg_text: str, *, overwrite: bool) -> str:
+    """Write the layer and its thumbnail. Returns the public image URL.
+
+    overwrite=False (new items) uses an exclusive create, so a slug race
+    fails loudly instead of one submitter's art silently replacing another's.
+    overwrite=True (PATCH) writes in place under the item's existing slug,
+    which is the whole point of a patch: the URL — and so every wardrobe
+    already holding the item — does not change.
+    """
     directory = UPLOAD_DIR / slot
     directory.mkdir(parents=True, exist_ok=True)
-    (directory / f"{slug}.svg").write_text(svg_text, encoding="utf-8")
-    (directory / f"{slug}.thumb.svg").write_text(thumbnail(svg_text, slot), encoding="utf-8")
+    layer = directory / f"{slug}.svg"
+    thumb = directory / f"{slug}.thumb.svg"
+
+    mode = "w" if overwrite else "x"
+    try:
+        with layer.open(mode, encoding="utf-8") as handle:
+            handle.write(svg_text)
+    except FileExistsError as exc:
+        raise SlugTakenError(
+            f'"{slug}" was just taken by another submission with the same '
+            "name. Retry — a different name will get a different slug."
+        ) from exc
+
+    with thumb.open("w", encoding="utf-8") as handle:
+        handle.write(thumbnail(svg_text, slot))
+
     return f"{UPLOAD_URL_PREFIX}/{slot}/{slug}.svg"
 
 

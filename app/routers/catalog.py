@@ -30,6 +30,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
@@ -204,7 +205,14 @@ def create_item(
         )
 
     slug = _free_slug(db, payload.slot.value, catalog_art.slugify(name))
-    image_url = catalog_art.write(payload.slot.value, slug, svg)
+    try:
+        image_url = catalog_art.write(payload.slot.value, slug, svg, overwrite=False)
+    except catalog_art.SlugTakenError as exc:
+        # Another request picked the same slug before either of us committed
+        # (_free_slug only ever checked the database, which is exactly the
+        # window this closes). The exclusive file create is what actually
+        # caught it; nothing was written for this request to clean up.
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
     item = ClothingItem(
         name=name,
@@ -215,7 +223,22 @@ def create_item(
         availability_status=payload.availability_status,
     )
     db.add(item)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # The last-resort backstop for the same race on `name`: the app-level
+        # _name_taken() check above ran before either request had committed,
+        # so two identically-named submissions can both pass it. The unique
+        # index on lower(name) is what actually decides which one wins; the
+        # loser's file is now orphaned on disk, so remove it here rather than
+        # leaving an unreferenced .svg behind.
+        db.rollback()
+        catalog_art.remove(image_url)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f'An item named "{name}" already exists. Pick another name, '
+            "or PATCH the existing one.",
+        ) from exc
     db.refresh(item)
     return _to_read(item)
 
@@ -236,8 +259,9 @@ def update_item(
         slot = item.category.slot.value
         # Rewritten under the item's EXISTING slug, so the URL does not change
         # and every wardrobe already holding this item picks up the new art.
+        # overwrite=True: this is the one place a rewrite is intentional.
         slug = _slug_of(item.image_url) or catalog_art.slugify(item.name)
-        item.image_url = catalog_art.write(slot, slug, svg)
+        item.image_url = catalog_art.write(slot, slug, svg, overwrite=True)
     else:
         updates.pop("svg", None)
 
@@ -258,7 +282,18 @@ def update_item(
     for field, value in updates.items():
         setattr(item, field, value)
 
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        # Backstop for the same rename race as create_item: two concurrent
+        # PATCHes renaming different items to the same name can both pass
+        # _name_taken() before either commits.
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="That name was just taken by another update. Retry with "
+            "a different name.",
+        ) from exc
     db.refresh(item)
     return _to_read(item)
 

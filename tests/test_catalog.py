@@ -9,13 +9,20 @@ Covers:
   - The spec: canvas, one entry per slot with its anchor and thumbnail crop,
     live item counts.
   - SVG validation, which is the point of the whole module — wrong viewBox,
-    <script>, event attributes, external href, external url(), DOCTYPE
-    entities, oversize, malformed XML. Each must be REFUSED, because the file
-    is written to disk and then served to every player.
+    <script>, event attributes, external href, external url(), url()/@import
+    hidden inside <style> text, processing instructions, XML comments,
+    DOCTYPE entities, oversize, malformed XML. Each must be REFUSED, because
+    the file is written to disk and then served to every player. A plain
+    <?xml ...?> declaration is the one processing instruction allowed through
+    — real editors emit it routinely.
   - Create: the item lands in the shop, the layer and the derived thumbnail
     are both on disk, the thumbnail carries the slot's crop and the same
     shapes, and the slot picks the category (a contributor never sees an id).
-  - Name collisions -> 409; slug collisions resolved without one.
+  - Name collisions -> 409, including a genuine race between two concurrent
+    identical submissions: exactly one must land, never two rows sharing a
+    name. Two different names that slugify to the same string race for the
+    same file: exactly one wins, the other gets a clean 409, never a silently
+    overwritten picture.
   - Patch: art replaced under the SAME url, so a wardrobe that already holds
     the item shows the new drawing.
   - Delete: refused (409) while a player owns the item, allowed otherwise,
@@ -26,9 +33,10 @@ Everything created is removed afterwards, including files.
 import time
 import uuid
 import warnings
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -103,6 +111,32 @@ REJECTED = [
         "not an <svg> root",
         '<div viewBox="0 0 512 768"></div>',
         "root element",
+    ),
+    (
+        "processing instruction",
+        '<?xml-stylesheet type="text/css" href="https://evil.example/x.css"?>'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 768"><rect width="1" height="1"/></svg>',
+        "processing instruction",
+    ),
+    (
+        "XML comment",
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 768">'
+        "<!-- <script>alert(1)</script> --><rect width=\"1\" height=\"1\"/></svg>",
+        "comment",
+    ),
+    (
+        "external url() inside <style>",
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 768">'
+        '<style>.a{fill:url(https://evil.example/g.svg#a)}</style>'
+        '<rect class="a" width="1" height="1"/></svg>',
+        "style",
+    ),
+    (
+        "@import inside <style>",
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 768">'
+        '<style>@import url(https://evil.example/x.css);</style>'
+        '<rect width="1" height="1"/></svg>',
+        "@import",
     ),
 ]
 
@@ -203,6 +237,22 @@ try:
     )
     results.append(("refuse oversize SVG -> 422", response.status_code == 422, str(response.status_code)))
 
+    # A plain XML declaration is the one processing instruction allowed
+    # through — real SVG editors emit it routinely, so it must not be caught
+    # by the same net as <?xml-stylesheet ...?>.
+    with_declaration = '<?xml version="1.0" encoding="UTF-8"?>\n' + GOOD_SVG
+    response = client.post(
+        "/catalog/items",
+        headers=AUTH,
+        json={"name": f"XmlDecl {RUN_ID}", "slot": "top", "price": 10, "svg": with_declaration},
+    )
+    decl_ok = response.status_code == 201
+    results.append(("a plain <?xml ...?> declaration is allowed through -> 201", decl_ok, str(response.status_code)))
+    if decl_ok:
+        decl_item = response.json()
+        created_item_ids.append(uuid.UUID(decl_item["item_id"]))
+        written_paths.append(catalog_art.UPLOAD_DIR / decl_item["image_url"].split("/media/uploads/", 1)[1])
+
     # --- The happy path ---------------------------------------------------
     name = f"Test Fest Tee {RUN_ID}"
     response = client.post(
@@ -287,6 +337,85 @@ try:
         created_item_ids.append(uuid.UUID(twin["item_id"]))
         written_paths.append(catalog_art.UPLOAD_DIR / twin["image_url"].split("/media/uploads/", 1)[1])
         results.append(("colliding slug got its own file", twin["image_url"] != created["image_url"], twin["image_url"]))
+
+    # --- The actual race, not just the sequential check ------------------
+    # Two threads, same name, fired together: this is what _name_taken()
+    # cannot catch on its own — both can pass it before either commits. The
+    # invariant that has to hold regardless of which one the scheduler lets
+    # through first: exactly one 201, exactly one 409, and the database ends
+    # up with exactly one row under that name.
+    race_name = f"Race Name {RUN_ID}"
+
+    def submit_same_name():
+        return client.post(
+            "/catalog/items",
+            headers=AUTH,
+            json={"name": race_name, "slot": "top", "price": 10, "svg": GOOD_SVG},
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        race_responses = list(pool.map(lambda _: submit_same_name(), range(2)))
+    race_codes = sorted(r.status_code for r in race_responses)
+    results.append(
+        (
+            "concurrent identical names: exactly one 201 and one 409",
+            race_codes == [201, 409],
+            str(race_codes),
+        )
+    )
+    winner = next((r for r in race_responses if r.status_code == 201), None)
+    if winner is not None:
+        won = winner.json()
+        created_item_ids.append(uuid.UUID(won["item_id"]))
+        written_paths.append(catalog_art.UPLOAD_DIR / won["image_url"].split("/media/uploads/", 1)[1])
+    with SessionLocal() as db:
+        row_count = db.execute(
+            select(func.count()).select_from(ClothingItem).where(
+                func.lower(ClothingItem.name) == race_name.lower()
+            )
+        ).scalar_one()
+    results.append(("the database holds exactly one row under that name", row_count == 1, str(row_count)))
+
+    # Two DIFFERENT names that fold to the same slug ("Race Slug X" and
+    # "Race-Slug X" both -> "race-slug-x"): the unique index on name cannot
+    # catch this, only the exclusive file create in catalog_art.write() can.
+    slug_name_a = f"Race Slug {RUN_ID}"
+    slug_name_b = f"Race-Slug {RUN_ID}"
+
+    def submit_colliding_slug(name):
+        return client.post(
+            "/catalog/items",
+            headers=AUTH,
+            json={"name": name, "slot": "top", "price": 10, "svg": GOOD_SVG},
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        slug_responses = list(
+            pool.map(submit_colliding_slug, [slug_name_a, slug_name_b])
+        )
+    slug_codes = sorted(r.status_code for r in slug_responses)
+    results.append(
+        (
+            "concurrent slug collision: exactly one 201 and one 409",
+            slug_codes == [201, 409],
+            str(slug_codes),
+        )
+    )
+    slug_winner = next((r for r in slug_responses if r.status_code == 201), None)
+    if slug_winner is not None:
+        won = slug_winner.json()
+        created_item_ids.append(uuid.UUID(won["item_id"]))
+        path = catalog_art.UPLOAD_DIR / won["image_url"].split("/media/uploads/", 1)[1]
+        written_paths.append(path)
+        results.append(("the winning file is intact, not corrupted", path.is_file() and "viewBox" in path.read_text(encoding="utf-8"), ""))
+    slug_loser = next((r for r in slug_responses if r.status_code == 409), None)
+    results.append(
+        (
+            "the loser's refusal explains the slug collision, not a generic 500",
+            slug_loser is not None and "taken" in str(slug_loser.json().get("detail", "")).lower(),
+            str(slug_loser.json().get("detail")) if slug_loser is not None else "no 409 in responses",
+        )
+    )
 
     # --- Patch: the art changes, the URL does not -------------------------
     redrawn = GOOD_SVG.replace("#E4002B", "#37C2A6")
