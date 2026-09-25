@@ -11,6 +11,7 @@ export default function Layout() {
     { to: '/products', label: 'Products', end: false },
     { to: '/clothing', label: 'Clothing', end: false },
     { to: '/users', label: 'Users', end: false },
+    { to: '/competitions', label: 'Battles', end: false },
   ]
 
   const handleLogout = () => {

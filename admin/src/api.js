@@ -46,6 +46,16 @@ export const api = {
       body: { username, password },
     }),
   adminMe: () => request('/admin/me'),
+  overview: () => request('/admin/overview'),
+  listCompetitions: (params) => {
+    const query = new URLSearchParams()
+    if (params.status) query.set('status', params.status)
+    if (params.q) query.set('q', params.q)
+    query.set('limit', String(params.limit || 20))
+    query.set('offset', String(params.offset || 0))
+    return request(`/admin/competitions?${query.toString()}`)
+  },
+  getCompetition: (competitionId) => request(`/admin/competitions/${competitionId}`),
   listQrs: (params) => {
     const query = new URLSearchParams()
     if (params.status) query.set('status', params.status)
