@@ -6,8 +6,8 @@ Endpoints (all require a valid JWT; participant identity comes only from the
 token via get_current_user(), never from a client-supplied id):
 
   POST /competition-requests                     send a challenge (201)
-  GET  /competition-requests/incoming            requests sent TO me
-  GET  /competition-requests/outgoing            requests sent BY me
+  GET  /competition-requests/incoming            PENDING requests sent TO me
+  GET  /competition-requests/outgoing            PENDING requests sent BY me
   POST /competition-requests/{id}/accept         opponent: PENDING -> ACCEPTED
                                                  AND creates an ACTIVE competition
   POST /competition-requests/{id}/decline        opponent: PENDING -> DECLINED
@@ -185,10 +185,19 @@ def list_incoming_requests(
     db: Session = Depends(get_db),
 ) -> list[CompetitionRequestRead]:
     # opponent_id comes ONLY from the JWT: a user can only ever see requests
-    # addressed to themselves.
+    # addressed to themselves. status=PENDING only — this list backs the
+    # screen that renders an Accept/Decline button on every row, and once a
+    # request leaves PENDING those buttons have nothing left to do. Without
+    # this filter an answered request never left the list: the card stayed
+    # on screen with live-looking buttons forever, so pressing Decline a
+    # second time on an already-declined request looked like decline simply
+    # did not work, when the first press had in fact already succeeded.
     rows = db.execute(
         select(CompetitionRequest)
-        .where(CompetitionRequest.opponent_id == current_user.user_id)
+        .where(
+            CompetitionRequest.opponent_id == current_user.user_id,
+            CompetitionRequest.status == CompetitionRequestStatus.PENDING,
+        )
         .options(
             joinedload(CompetitionRequest.challenger),
             joinedload(CompetitionRequest.opponent),
@@ -217,10 +226,16 @@ def list_outgoing_requests(
     db: Session = Depends(get_db),
 ) -> list[CompetitionRequestRead]:
     # challenger_id comes ONLY from the JWT: a user can only ever see requests
-    # they themselves sent.
+    # they themselves sent. status=PENDING only, for the same reason as
+    # /incoming above: this backs the screen that offers a Cancel button on
+    # every row, and a request that already left PENDING has nothing left to
+    # cancel.
     rows = db.execute(
         select(CompetitionRequest)
-        .where(CompetitionRequest.challenger_id == current_user.user_id)
+        .where(
+            CompetitionRequest.challenger_id == current_user.user_id,
+            CompetitionRequest.status == CompetitionRequestStatus.PENDING,
+        )
         .options(
             joinedload(CompetitionRequest.challenger),
             joinedload(CompetitionRequest.opponent),

@@ -27,17 +27,17 @@ import time
 import uuid
 import warnings
 
-warnings.filterwarnings(
-    "ignore",
-    message="Using `httpx` with `starlette.testclient` is deprecated.*",
-)
-
 from fastapi.testclient import TestClient
 from sqlalchemy import or_, select
 
 from app.core.database import SessionLocal
 from app.main import app
 from app.models import Competition, CompetitionRequest, User
+
+warnings.filterwarnings(
+    "ignore",
+    message="Using `httpx` with `starlette.testclient` is deprecated.*",
+)
 
 client = TestClient(app)
 
@@ -365,6 +365,54 @@ results.append(("CANCELLED can't be accepted -> 409", act("accept", TOKEN_B, can
 results.append(("CANCELLED can't be declined -> 409", act("decline", TOKEN_B, can).status_code == 409, ""))
 results.append(("ACCEPTED/ DECLINED/ CANCELLED all terminal in DB",
                 [fetch_request(x)["status"] for x in (acc, dec, can)] == ["ACCEPTED", "DECLINED", "CANCELLED"], ""))
+
+# --- Answered requests leave /incoming and /outgoing --------------------------------------------------
+# A request that has left PENDING has no action left to offer: the Mini App
+# renders an Accept/Decline button on every row these two lists return, so a
+# terminal-state row that stayed listed would sit on screen with buttons that
+# look live but do nothing new — which is exactly what happened here before
+# these endpoints filtered on status: pressing Decline a second time on an
+# already-declined request (because the first press never made the card
+# disappear) returned 409, and from the screen that looked identical to
+# "Decline doesn't work" even though the very first press had already
+# succeeded.
+incoming_b_after = incoming(TOKEN_B)
+results.append(
+    (
+        "an ACCEPTED request leaves B's incoming list",
+        not any(q["request_id"] == acc for q in incoming_b_after),
+        str([q["request_id"] for q in incoming_b_after]),
+    )
+)
+results.append(
+    (
+        "a DECLINED request leaves B's incoming list",
+        not any(q["request_id"] == dec for q in incoming_b_after),
+        "",
+    )
+)
+outgoing_a_after = outgoing(TOKEN_A)
+results.append(
+    (
+        "an ACCEPTED request leaves A's outgoing list",
+        not any(q["request_id"] == acc for q in outgoing_a_after),
+        str([q["request_id"] for q in outgoing_a_after]),
+    )
+)
+results.append(
+    (
+        "a CANCELLED request leaves A's outgoing list",
+        not any(q["request_id"] == can for q in outgoing_a_after),
+        "",
+    )
+)
+results.append(
+    (
+        "a still-PENDING request is unaffected",
+        any(q["request_id"] == valid_durations[360] for q in incoming(TOKEN_B)),
+        "",
+    )
+)
 
 # --- 34. Isolation: an outsider cannot manipulate A/B requests --------------------------------------------
 outsider_pending = valid_durations[360]
