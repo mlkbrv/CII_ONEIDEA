@@ -1,0 +1,92 @@
+/* The shell every screen sits in: header, scrolling content, bottom nav. */
+
+/* --- Frame ---------------------------------------------------------------- */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 10px 16px;
+  background: var(--bg);
+  /* Telegram draws its own chrome above this; the border keeps the header
+     legible when content scrolls underneath. */
+  border-bottom: 1px solid rgb(255 255 255 / 6%);
+}
+
+.brand {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.bell {
+  position: relative;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 17px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 17px;
+}
+
+.content {
+  flex: 1;
+  /* Room for the fixed nav, plus the home indicator on a notched phone. */
+  padding: 14px 16px calc(84px + env(safe-area-inset-bottom));
+}
+
+.nav {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--surface);
+  border-top: 1px solid rgb(255 255 255 / 6%);
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 9px 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.nav-item.is-active {
+  color: var(--text);
+}
+
+.nav-icon {
+  font-size: 19px;
+  line-height: 1;
+}

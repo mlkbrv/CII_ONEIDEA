@@ -1,7 +1,14 @@
 .venv/
+venv/
 .env
 __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
-promo_codes*.csv
+node_modules/
+dist/
+dist-ssr/
+*.local
+.DS_Store
+media/uploads/
+cloudflared/

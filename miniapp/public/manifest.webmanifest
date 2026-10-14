@@ -1,0 +1,14 @@
+{
+  "name": "Cola Fest",
+  "short_name": "Cola Fest",
+  "description": "Собирай монеты с крышек, одевай медведя и побеждай в баттлах образов",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#12151a",
+  "theme_color": "#E4002B",
+  "icons": [
+    { "src": "/app/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

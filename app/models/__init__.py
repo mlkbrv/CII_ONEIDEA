@@ -1,45 +1,78 @@
-from app.models.avatar import Avatar
-from app.models.clothing import ClothingCategory, ClothingItem, EquippedItem, WardrobeItem
-from app.models.coin import CoinTransaction
-from app.models.competition import Competition, CompetitionRequest, Vote
-from app.models.enums import (
+"""
+ORM models — complete schema, all 19 tables from the design doc.
+
+Batch 1 — core user/authentication: users, auth_providers,
+device_tokens, follows.
+Batch 2 — avatar & clothing: avatars, clothing_categories,
+clothing_items, user_wardrobe, avatar_equipment.
+Batch 3 — QR/coins: products, qr_codes, coin_transaction_types,
+coin_transactions.
+Batch 4 — competitions: competition_requests, competition_status,
+competitions, votes.
+Batch 5 — notifications: notification_types, notifications.
+
+Two Postgres triggers ship alongside the ORM definitions (see
+competition.py and vote.py) — they install automatically via
+`Base.metadata.create_all(engine)` through SQLAlchemy DDL events, but
+haven't been executed against a real Postgres instance yet. Verify
+them against an actual database before relying on them in production.
+"""
+from app.core.database import Base
+from .enums import (
     AuthProviderType,
-    ClothingSlot,
+    AvatarSlot,
+    ClothingAvailability,
     CompetitionRequestStatus,
-    CompetitionStatus,
     DevicePlatform,
-    NotificationType,
-    TransactionType,
+    QRStatus,
+    TransactionDirection,
 )
-from app.models.notification import Notification
-from app.models.product import Product, ProductCode
-from app.models.promo import PromoCode
-from app.models.social import UserFollow
-from app.models.user import AuthProvider, DeviceToken, User
+from .user import User
+from .auth_provider import AuthProvider
+from .device_token import DeviceToken
+from .follow import Follow
+from .avatar import Avatar
+from .clothing_category import ClothingCategory
+from .clothing_item import ClothingItem
+from .user_wardrobe import UserWardrobe
+from .avatar_equipment import AvatarEquipment
+from .product import Product
+from .qr_code import QRCode
+from .coin_transaction_type import CoinTransactionType
+from .coin_transaction import CoinTransaction
+from .competition_status import CompetitionStatus
+from .competition_request import CompetitionRequest
+from .competition import Competition
+from .vote import Vote
+from .notification_type import NotificationType
+from .notification import Notification
 
 __all__ = [
-    "AuthProvider",
+    "Base",
     "AuthProviderType",
+    "AvatarSlot",
+    "ClothingAvailability",
+    "CompetitionRequestStatus",
+    "DevicePlatform",
+    "QRStatus",
+    "TransactionDirection",
+    "User",
+    "AuthProvider",
+    "DeviceToken",
+    "Follow",
     "Avatar",
     "ClothingCategory",
     "ClothingItem",
-    "ClothingSlot",
-    "CoinTransaction",
-    "Competition",
-    "CompetitionRequest",
-    "CompetitionRequestStatus",
-    "CompetitionStatus",
-    "DevicePlatform",
-    "DeviceToken",
-    "EquippedItem",
-    "Notification",
-    "NotificationType",
+    "UserWardrobe",
+    "AvatarEquipment",
     "Product",
-    "ProductCode",
-    "PromoCode",
-    "TransactionType",
-    "User",
-    "UserFollow",
+    "QRCode",
+    "CoinTransactionType",
+    "CoinTransaction",
+    "CompetitionStatus",
+    "CompetitionRequest",
+    "Competition",
     "Vote",
-    "WardrobeItem",
+    "NotificationType",
+    "Notification",
 ]

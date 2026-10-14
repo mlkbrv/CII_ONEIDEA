@@ -1,0 +1,21 @@
+"""
+Schemas for admin-console concerns that span modules.
+
+AdminUserRead is the response of GET /admin/me — the identity of the
+currently authenticated administrator, shown in the admin sidebar. It is
+deliberately narrow: only what the operator needs to see who they are.
+"""
+import uuid
+
+from pydantic import BaseModel, ConfigDict
+
+
+class AdminUserRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: uuid.UUID
+    username: str
+    # Optional since Telegram accounts: a Mini App session never carries an
+    # email address, so this is null for every Telegram-only user.
+    email: str | None = None
+    is_admin: bool

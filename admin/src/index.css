@@ -1,0 +1,7 @@
+/* Split for size (see AGENTS.md's 600-line guidance): base.css is the
+ * app chrome — tokens, reset, layout, login, forms, buttons, page/toolbar —
+ * everything a screen inherits just by existing. components.css is what a
+ * specific screen opts into — tables, pills, cards, stat tiles, battle
+ * layout, the detail-page grid, pagination, modals. */
+@import './styles/base.css';
+@import './styles/components.css';
