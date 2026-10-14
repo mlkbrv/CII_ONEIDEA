@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.core.telegram import TelegramUser
 from app.services.i18n import normalise_language
+from app.services.welcome_bonus import grant_welcome_bonus
 from app.models import AuthProvider, AuthProviderType, Avatar, User
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,7 @@ def _create_telegram_user(db: Session, telegram_user: TelegramUser) -> User:
     )
 
     db.add_all([user, avatar, provider])
+    grant_welcome_bonus(db, user)
     db.commit()
     db.refresh(user)
     logger.info("Created account %s from Telegram id %s", user.username, telegram_user.id)

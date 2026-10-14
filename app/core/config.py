@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     db_max_overflow: int = 15
     db_pool_timeout: int = 10
 
+    # Coins every new account starts with. 0 disables the grant.
+    welcome_bonus_coins: int = 1000
+
     # Secret used to sign JWT access tokens. Must be kept secret (it lives
     # in .env, which is gitignored). Never hardcode it in source.
     secret_key: str
