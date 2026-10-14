@@ -100,7 +100,7 @@ def apply() -> None:
             while (entry["slot"], slug) in taken_slugs:
                 slug += "-2"
             taken_slugs.add((entry["slot"], slug))
-            url = catalog_art.write(entry["slot"], slug, entry["svg"], overwrite=False)
+            url = catalog_art.write(entry["slot"], slug, entry["svg"], overwrite=True)
             db.add(ClothingItem(name=entry["name"], description=entry["description"], category_id=category.category_id,
                                 price=entry["price"], image_url=url, availability_status=ClothingAvailability.AVAILABLE))
             created += 1
