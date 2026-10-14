@@ -11,7 +11,7 @@
    `$env:K6_PROMETHEUS_RW_TREND_AS_NATIVE_HISTOGRAM="true"`
    `k6 run -o experimental-prometheus-rw -e BASE_URL=http://SERVER:PORT -e PROFILE=smoke script.js`
 
-   Profiles: `smoke` (5 VU, 30s), `ramp` (up to 400 VU, 10 min), `soak` (50 VU, 30 min).
+   Profiles: `ramp5k` (up to 5000 VU, 17 min), `smoke` (5 VU, 30s), `ramp` (up to 400 VU, 10 min), `soak` (50 VU, 30 min).
    Use `-e USERS=100` to change the number of test accounts, `-e RUN_ID=b` for a fresh set.
 
 4. On the server in parallel: `docker stats` and `htop`.
