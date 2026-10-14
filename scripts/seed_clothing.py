@@ -10,7 +10,8 @@
   2. adds the new items below that are not in the shop yet;
   3. sets every item whose art file is still missing to "unavailable", so the
      shop never shows an empty picture.
-It never overwrites a file that exists and never changes an existing price.
+It never overwrites a file that exists (unless --redraw is given) and never changes
+an existing price.
 
 APP_ROOT=<path to the API source> lets --export run from another checkout.
 """
@@ -65,7 +66,7 @@ def export(out: pathlib.Path, root: pathlib.Path) -> None:
     print(f"{len(cards)} items -> {out}")
 
 
-def apply() -> None:
+def apply(redraw: bool) -> None:
     from sqlalchemy import select
 
     from app.core.database import SessionLocal
@@ -86,7 +87,7 @@ def apply() -> None:
             if current is not None:
                 if current.image_url.startswith(catalog_art.UPLOAD_URL_PREFIX):
                     file = catalog_art.MEDIA_DIR / current.image_url.removeprefix("/media/")
-                    if not file.exists():
+                    if redraw or not file.exists():
                         slot, slug = current.image_url.split("/")[-2], current.image_url.split("/")[-1][:-4]
                         catalog_art.write(slot, slug, entry["svg"], overwrite=True)
                         repaired += 1
@@ -124,12 +125,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--export", type=pathlib.Path)
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--redraw", action="store_true")
     args = parser.parse_args()
     root = pathlib.Path(os.environ.get("APP_ROOT") or pathlib.Path(__file__).resolve().parent.parent)
     sys.path.insert(0, str(root))
     if args.export:
         export(args.export, root)
     elif args.apply:
-        apply()
+        apply(args.redraw)
     else:
         parser.print_help()
