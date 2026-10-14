@@ -16,6 +16,8 @@ services:
   postgres:
     image: postgres:16
     container_name: cci-postgres
+    # 4 API workers * (15 + 15) pool connections + worker + headroom.
+    command: postgres -c max_connections=200
     environment:
       POSTGRES_USER: cci
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}

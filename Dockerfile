@@ -48,4 +48,4 @@ EXPOSE 8000
 # stops the container loudly instead of starting an API against a schema it
 # does not match. The worker waits for the API's healthcheck, so exactly one
 # process ever runs them.
-CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-4}"]

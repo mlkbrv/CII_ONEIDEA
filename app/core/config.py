@@ -4,6 +4,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     database_url: str
 
+    # Connection pool per uvicorn worker. SQLAlchemy's defaults (5 + 10) made
+    # every request beyond 15 in flight wait for a connection and time out.
+    # Total connections = workers * (pool_size + max_overflow), and must stay
+    # below Postgres max_connections (see docker-compose.yml).
+    db_pool_size: int = 15
+    db_max_overflow: int = 15
+    db_pool_timeout: int = 10
+
     # Secret used to sign JWT access tokens. Must be kept secret (it lives
     # in .env, which is gitignored). Never hardcode it in source.
     secret_key: str
