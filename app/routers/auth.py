@@ -26,6 +26,7 @@ from app.schemas.telegram import TelegramInitDataLogin, TelegramWidgetLogin
 from app.schemas.token import LoginRequest, Token
 from app.schemas.user import UserRead, UserRegister
 from app.services.telegram_auth import get_or_create_telegram_user
+from app.services.welcome_bonus import grant_welcome_bonus
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -71,6 +72,7 @@ def register(payload: UserRegister, db: Session = Depends(get_db)) -> User:
     try:
         db.add(user)
         db.add(avatar)
+        grant_welcome_bonus(db, user)
         db.commit()
     except IntegrityError as exc:
         db.rollback()
