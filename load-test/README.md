@@ -28,7 +28,7 @@ Then `docker compose up -d api`, and run k6 with `-e BASE_URL=http://173.249.42.
 Afterwards delete the override file and run `docker compose up -d api` again (the port closes).
 Optionally restrict it: `ufw allow from <your IP> to any port 18080`.
 
-## Cleanup (removes all `@loadtest.invalid` users and their data)
+## Cleanup (removes all `@loadtest.example.com` users and their data)
     docker exec -i cci-postgres psql -U cci -d cci < cleanup.sql
 
 Check `left_over = 0` in the output. QR codes redeemed by test users are reset to ACTIVE

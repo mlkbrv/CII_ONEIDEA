@@ -45,7 +45,7 @@ export function setup() {
   const tokens = [];
   for (let i = 0; i < USERS; i++) {
     const username = `${PREFIX}_${i}`;
-    const body = { username, email: `${username}@loadtest.invalid`, password: PASSWORD };
+    const body = { username, email: `${username}@loadtest.example.com`, password: PASSWORD };
     http.post(`${BASE}/auth/register`, JSON.stringify(body), { ...json, responseCallback: OK });
     const r = http.post(
       `${BASE}/auth/login`,
