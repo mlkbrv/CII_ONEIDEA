@@ -126,6 +126,8 @@ export default function UsersPage() {
               <tr>
                 <th>User</th>
                 <th>Email</th>
+                <th>Gender</th>
+                <th>Age</th>
                 <th>Coins</th>
                 <th>Streak</th>
                 <th>Status</th>
@@ -136,7 +138,7 @@ export default function UsersPage() {
             <tbody>
               {items.length === 0 && (
                 <tr>
-                  <td colSpan="7" className="table-empty">
+                  <td colSpan="9" className="table-empty">
                     No users found
                   </td>
                 </tr>
@@ -148,6 +150,8 @@ export default function UsersPage() {
                     <span>{user.username}</span>
                   </td>
                   <td>{user.email}</td>
+                  <td>{user.gender || '—'}</td>
+                  <td>{user.age ?? '—'}</td>
                   <td>{user.coin_balance}</td>
                   <td>{user.winning_streak}</td>
                   <td>

@@ -95,7 +95,23 @@ class UserRead(BaseModel):
     profile_picture_url: str | None = None
     is_active: bool
     language: str
+    gender: str | None = None
+    birth_year: int | None = None
+    demographics_status: str | None = None
     created_at: datetime
+
+
+class DemographicsSubmit(BaseModel):
+    """Body of POST /users/me/demographics. At least one answer is required."""
+
+    gender: Literal["male", "female", "undisclosed"] | None = None
+    birth_year: int | None = None
+
+
+class DemographicsResult(BaseModel):
+    user: UserRead
+    bonus_coins: int
+    balance: int
 
 
 class UserPublic(BaseModel):

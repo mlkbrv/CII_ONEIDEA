@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     # Coins every new account starts with. 0 disables the grant.
     welcome_bonus_coins: int = 1000
 
+    # Paid once to a player who fills in the optional gender/age form.
+    demographics_bonus_coins: int = 100
+
     # Secret used to sign JWT access tokens. Must be kept secret (it lives
     # in .env, which is gitignored). Never hardcode it in source.
     secret_key: str

@@ -178,4 +178,22 @@ export default {
   "signin.not_configured": "Brauzerdən giriş qurulmayıb. Tətbiqi Telegram-dan aç.",
   "signin.open_in_telegram": "Telegram-da aç",
   "signin.failed": "Daxil olmaq alınmadı",
+
+  // --- demographics ----------------------------------------------------------
+  "demographics.title": "Özün haqqında de",
+  "demographics.subtitle": "Könüllüdür. Cavab ver və hədiyyə olaraq 100 sikkə qazan.",
+  "demographics.gender": "Cins",
+  "demographics.gender_male": "Kişi",
+  "demographics.gender_female": "Qadın",
+  "demographics.gender_undisclosed": "Demək istəmirəm",
+  "demographics.year": "Doğum ili",
+  "demographics.year_placeholder": "Göstərmə",
+  "demographics.privacy": "Bu məlumat yalnız ümumi statistika üçündür və digər oyunçulara göstərilmir.",
+  "demographics.save": "Yadda saxla",
+  "demographics.skip": "Sonra",
+  "demographics.error": "Yadda saxlamaq alınmadı. Yenidən cəhd et.",
+  "demographics.thanks": "Təşəkkür edirik!",
+  "demographics.bonus_received": "Sənin hədiyyən:",
+  "demographics.close": "Əla",
+  "demographics.profile_cta": "📝 İki suala cavab ver və 100 sikkə qazan",
 };

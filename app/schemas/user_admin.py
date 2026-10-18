@@ -12,7 +12,9 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
+
+from app.services.demographics import age_of
 
 
 class UserAdminRead(BaseModel):
@@ -28,8 +30,16 @@ class UserAdminRead(BaseModel):
     coin_balance: int
     winning_streak: int
     is_active: bool
+    gender: str | None = None
+    birth_year: int | None = None
+    demographics_status: str | None = None
     created_at: datetime
     updated_at: datetime
+
+    @computed_field
+    @property
+    def age(self) -> int | None:
+        return age_of(self.birth_year)
 
 
 class UserAdminStatusUpdate(BaseModel):

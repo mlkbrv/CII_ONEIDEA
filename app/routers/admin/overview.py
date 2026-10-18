@@ -29,6 +29,7 @@ from app.models import (
     Vote,
 )
 from app.schemas.admin_overview import AdminOverview
+from app.services import demographics
 
 router = APIRouter(tags=["admin"])
 
@@ -116,5 +117,6 @@ def get_overview(
         competitions_completed=competition_status_counts.get("completed", 0),
         votes_cast_total=votes_cast_total,
         notifications_pending=notifications_pending,
+        demographics=demographics.stats(db),
         generated_at=datetime.now(timezone.utc),
     )

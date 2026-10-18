@@ -69,6 +69,8 @@ export default function UserDetailPage() {
   const rows = [
     ['Username', user.username],
     ['Email', user.email],
+    ['Gender', user.gender || '—'],
+    ['Age', user.age != null ? `${user.age} (born ${user.birth_year})` : '—'],
     ['Coin balance', String(user.coin_balance)],
     ['Winning streak', String(user.winning_streak)],
     ['Status', <span className={`pill ${user.is_active ? 'pill-active' : 'pill-inactive'}`}>{user.is_active ? 'active' : 'inactive'}</span>],

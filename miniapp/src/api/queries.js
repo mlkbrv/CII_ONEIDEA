@@ -159,6 +159,23 @@ export function useUpdateMe() {
   });
 }
 
+export function useSubmitDemographics() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (answers) => api("/users/me/demographics", { method: "POST", body: answers }),
+    // A bonus may have been paid, so the balance is stale as well as the profile.
+    onSuccess: () => invalidate(client, ["coins", "me", "shop", "transactions"]),
+  });
+}
+
+export function useSkipDemographics() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api("/users/me/demographics/skip", { method: "POST" }),
+    onSuccess: () => invalidate(client, ["me"]),
+  });
+}
+
 export function usePurchase() {
   const client = useQueryClient();
   return useMutation({

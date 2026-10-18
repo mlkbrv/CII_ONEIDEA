@@ -19,6 +19,7 @@ import {
   useUpdateMe,
 } from "../api/queries";
 import AvatarView from "../components/AvatarView";
+import DemographicsForm from "../components/DemographicsForm";
 import { Button, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
 import { LANGUAGES, useI18n, useT } from "../i18n";
 import { haptic } from "../platform/telegram";
@@ -40,6 +41,7 @@ export default function Profile() {
   const challenge = useChallenge();
   const updateMe = useUpdateMe();
 
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [challenging, setChallenging] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -185,6 +187,13 @@ export default function Profile() {
           </div>
         </Card>
       ) : null}
+
+      {user.is_self && me?.demographics_status !== "answered" ? (
+        <Card className="link-card" onClick={() => setAboutOpen(true)}>
+          {t("demographics.profile_cta")}
+        </Card>
+      ) : null}
+      {aboutOpen ? <DemographicsForm onClose={() => setAboutOpen(false)} /> : null}
 
       {user.wardrobe_public || user.is_self ? (
         <Link to={user.is_self ? "/wardrobe" : `/u/${user.user_id}/wardrobe`}>

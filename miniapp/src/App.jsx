@@ -17,6 +17,7 @@ import { HashRouter, Navigate, Route, Routes, useNavigate } from "react-router-d
 import { canAuthenticate } from "./api/client";
 import { useMe } from "./api/queries";
 import { useI18n } from "./i18n";
+import { DemographicsGate } from "./components/DemographicsForm";
 import Layout from "./components/Layout";
 import { ready, startParam } from "./platform/telegram";
 import Battle from "./screens/Battle";
@@ -48,6 +49,7 @@ export default function App() {
     <HashRouter>
       <AccountLanguage />
       <DeepLink />
+      <DemographicsGate />
       <Layout>
         <Routes>
           <Route path="/" element={<Home />} />

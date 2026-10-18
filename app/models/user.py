@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, CheckConstraint, String, text
+from sqlalchemy import BigInteger, CheckConstraint, SmallInteger, String, text
 from sqlalchemy.dialects.postgresql import CITEXT, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -92,6 +92,15 @@ class User(Base):
 
     profile_picture_url: Mapped[str | None] = mapped_column(nullable=True)
     biography: Mapped[str | None] = mapped_column(nullable=True)
+
+    # Optional self-reported demographics, for the operators' statistics only.
+    # Year of birth rather than a date: it is all an age needs, and it is less
+    # to hold. demographics_status is NULL until the player has been asked,
+    # then 'skipped' or 'answered'; the sign-up bonus is paid once, on the
+    # first move to 'answered'. Never returned to other players.
+    gender: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    birth_year: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    demographics_status: Mapped[str | None] = mapped_column(String(10), nullable=True)
 
     coin_balance: Mapped[int] = mapped_column(nullable=False, server_default=text("0"))
     winning_streak: Mapped[int] = mapped_column(nullable=False, server_default=text("0"))

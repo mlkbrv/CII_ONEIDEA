@@ -178,4 +178,22 @@ export default {
   "signin.not_configured": "Browser sign-in is not configured. Open the app from Telegram.",
   "signin.open_in_telegram": "Open in Telegram",
   "signin.failed": "Could not sign in",
+
+  // --- demographics ----------------------------------------------------------
+  "demographics.title": "Tell us about yourself",
+  "demographics.subtitle": "Optional. Answer and get 100 coins as a gift.",
+  "demographics.gender": "Gender",
+  "demographics.gender_male": "Male",
+  "demographics.gender_female": "Female",
+  "demographics.gender_undisclosed": "Prefer not to say",
+  "demographics.year": "Year of birth",
+  "demographics.year_placeholder": "Prefer not to say",
+  "demographics.privacy": "This is used for overall statistics only and is never shown to other players.",
+  "demographics.save": "Save",
+  "demographics.skip": "Later",
+  "demographics.error": "Could not save. Please try again.",
+  "demographics.thanks": "Thank you!",
+  "demographics.bonus_received": "Your gift:",
+  "demographics.close": "Great",
+  "demographics.profile_cta": "📝 Answer two quick questions and get 100 coins",
 };

@@ -52,6 +52,31 @@ export default function DashboardPage() {
             <StatTile label="New, last 24h" value={stats.users_new_24h} accent="ok" />
           </StatSection>
 
+          <StatSection title="Gender (self-reported)">
+            <StatTile label="Male" value={stats.demographics.gender.male} />
+            <StatTile label="Female" value={stats.demographics.gender.female} />
+            <StatTile label="Prefer not to say" value={stats.demographics.gender.undisclosed} />
+            <StatTile label="Unknown" value={stats.demographics.gender.unknown} accent="warn" />
+          </StatSection>
+
+          <StatSection title="Age (self-reported)">
+            <StatTile label="Under 18" value={stats.demographics.age_groups.under_18} />
+            <StatTile label="18–24" value={stats.demographics.age_groups['18_24']} />
+            <StatTile label="25–34" value={stats.demographics.age_groups['25_34']} />
+            <StatTile label="35–44" value={stats.demographics.age_groups['35_44']} />
+            <StatTile label="45+" value={stats.demographics.age_groups['45_plus']} />
+            <StatTile label="Unknown" value={stats.demographics.age_groups.unknown} accent="warn" />
+            <StatTile
+              label="Average age"
+              value={stats.demographics.average_age ?? '—'}
+            />
+            <StatTile
+              label="Filled in the form"
+              value={`${stats.demographics.answered} of ${stats.users_total}`}
+              accent="ok"
+            />
+          </StatSection>
+
           <StatSection title="Coins">
             <StatTile label="In circulation" value={stats.coins_in_circulation} />
             <StatTile label="Issued (lifetime)" value={stats.coins_issued_total} accent="ok" />

@@ -68,8 +68,16 @@ from app.models import CoinTransaction, Follow, QRCode, User
 from app.schemas.avatar import AvatarRead
 from app.schemas.coin import CoinBalance, CoinTransactionRead, QRTransactionReference
 from app.schemas.profile import FollowList, FollowUser, PublicProfile
-from app.schemas.user import FollowStatus, UserPublic, UserRead, UserUpdate
+from app.schemas.user import (
+    DemographicsResult,
+    DemographicsSubmit,
+    FollowStatus,
+    UserPublic,
+    UserRead,
+    UserUpdate,
+)
 from app.schemas.wardrobe import WardrobeList
+from app.services import demographics
 from app.services.notifications import NEW_FOLLOWER, create_notification
 from app.services.profiles import (
     active_competition_id,
@@ -237,6 +245,44 @@ def update_current_user(
         db.rollback()
         raise _username_conflict() from exc
 
+    db.refresh(user)
+    return user
+
+
+@router.post("/me/demographics", response_model=DemographicsResult)
+def submit_demographics(
+    payload: DemographicsSubmit,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> DemographicsResult:
+    if payload.gender is None and payload.birth_year is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Send gender, birth_year, or both",
+        )
+    if payload.birth_year is not None and payload.birth_year not in demographics.valid_birth_years():
+        years = demographics.valid_birth_years()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"birth_year must be between {years.start} and {years.stop - 1}",
+        )
+    user = db.get(User, current_user.user_id, with_for_update=True)
+    bonus = demographics.submit(db, user, payload.gender, payload.birth_year)
+    db.refresh(user)
+    return DemographicsResult(
+        user=UserRead.model_validate(user),
+        bonus_coins=bonus,
+        balance=user.coin_balance,
+    )
+
+
+@router.post("/me/demographics/skip", response_model=UserRead)
+def skip_demographics(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> User:
+    user = db.get(User, current_user.user_id, with_for_update=True)
+    demographics.skip(db, user)
     db.refresh(user)
     return user
 

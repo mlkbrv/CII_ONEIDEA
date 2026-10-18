@@ -10,6 +10,21 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
+class DemographicsStats(BaseModel):
+    """Self-reported gender and age, counted over all users.
+
+    `unknown` buckets are the players who skipped or were never asked, so the
+    numbers in each group always add up to users_total.
+    """
+
+    answered: int
+    skipped: int
+    not_asked: int
+    gender: dict[str, int]
+    age_groups: dict[str, int]
+    average_age: float | None
+
+
 class AdminOverview(BaseModel):
     users_total: int
     users_active: int
@@ -32,6 +47,8 @@ class AdminOverview(BaseModel):
     votes_cast_total: int
 
     notifications_pending: int
+
+    demographics: DemographicsStats
 
     # When this snapshot was computed — every field above is a live COUNT/SUM
     # at read time, not a cached rollup, so a dashboard polling this endpoint

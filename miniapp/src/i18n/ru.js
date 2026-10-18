@@ -187,4 +187,22 @@ export default {
   "signin.not_configured": "Вход через браузер не настроен. Открой приложение из Telegram.",
   "signin.open_in_telegram": "Открыть в Telegram",
   "signin.failed": "Не удалось войти",
+
+  // --- demographics ----------------------------------------------------------
+  "demographics.title": "Расскажи о себе",
+  "demographics.subtitle": "Это по желанию. Ответь и получи 100 монет в подарок.",
+  "demographics.gender": "Пол",
+  "demographics.gender_male": "Мужской",
+  "demographics.gender_female": "Женский",
+  "demographics.gender_undisclosed": "Не хочу говорить",
+  "demographics.year": "Год рождения",
+  "demographics.year_placeholder": "Не указывать",
+  "demographics.privacy": "Эти данные нужны только для общей статистики и не видны другим игрокам.",
+  "demographics.save": "Сохранить",
+  "demographics.skip": "Позже",
+  "demographics.error": "Не удалось сохранить. Попробуй ещё раз.",
+  "demographics.thanks": "Спасибо!",
+  "demographics.bonus_received": "Твой подарок:",
+  "demographics.close": "Отлично",
+  "demographics.profile_cta": "📝 Ответь на пару вопросов и получи 100 монет",
 };
