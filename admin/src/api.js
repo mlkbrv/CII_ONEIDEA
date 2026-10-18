@@ -31,6 +31,41 @@ async function request(path, { method = 'GET', body } = {}) {
   return data
 }
 
+async function requestFile(path, { method = 'GET', body } = {}) {
+  const headers = {}
+  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+
+  const response = await fetch(path, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null)
+    const error = new Error(statusMessage(response, data))
+    error.status = response.status
+    throw error
+  }
+  return {
+    blob: await response.blob(),
+    count: Number(response.headers.get('X-QR-Count')) || 0,
+  }
+}
+
+export function saveFile(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
 function statusMessage(response, data) {
   if (data && data.detail) {
     const detail = data.detail
@@ -65,6 +100,14 @@ export const api = {
     return request(`/admin/qr-codes?${query.toString()}`)
   },
   createQr: (body) => request('/admin/qr-codes', { method: 'POST', body }),
+  createQrBatch: (body) => requestFile('/admin/qr-codes/batch', { method: 'POST', body }),
+  printQrs: (params) => {
+    const query = new URLSearchParams()
+    if (params.status) query.set('status', params.status)
+    query.set('limit', String(params.limit || 200))
+    query.set('per_page', String(params.perPage || 20))
+    return requestFile(`/admin/qr-codes/print?${query.toString()}`)
+  },
   getQr: (qrId) => request(`/admin/qr-codes/${qrId}`),
   updateQrStatus: (qrId, status) =>
     request(`/admin/qr-codes/${qrId}`, { method: 'PATCH', body: { status } }),

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -52,6 +53,20 @@ class QRAdminCreate(BaseModel):
         default=None,
         description="Optional expiry; once reached the code cannot be redeemed",
     )
+
+
+PerPage = Literal[1, 4, 6, 12, 20, 24, 35]
+
+
+class QRBatchCreate(BaseModel):
+    """Body of POST /admin/qr-codes/batch: create `count` codes and get a
+    printable PDF with `per_page` codes on each A4 page."""
+
+    product_id: uuid.UUID
+    coin_value: int = Field(gt=0, description="Coins awarded per code (must be > 0)")
+    count: int = Field(ge=1, le=2000, description="How many codes to create (1-2000)")
+    per_page: PerPage = Field(default=20, description="Codes per printed page")
+    expires_at: datetime | None = None
 
 
 class QRAdminUpdate(BaseModel):

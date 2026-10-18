@@ -30,10 +30,10 @@ Design notes
 import secrets
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.database import get_db
 from app.dependencies import get_current_admin
@@ -43,7 +43,9 @@ from app.schemas.admin_qr import (
     QRAdminList,
     QRAdminRead,
     QRAdminUpdate,
+    QRBatchCreate,
 )
+from app.services.qr_pdf import GRIDS, build_pdf
 
 router = APIRouter(tags=["admin"])
 
@@ -125,6 +127,58 @@ def create_qr_code(
     return qr
 
 
+@router.post("/batch")
+def create_qr_batch(
+    payload: QRBatchCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+) -> Response:
+    product = db.get(Product, payload.product_id)
+    if product is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Product not found",
+        )
+
+    codes = _insert_batch(db, payload)
+    pdf = build_pdf([(code, payload.coin_value, product.sku) for code in codes], payload.per_page)
+    db.commit()
+    return _pdf_response(pdf, f"qr-codes-{len(codes)}.pdf", len(codes))
+
+
+@router.get("/print")
+def print_qr_codes(
+    status_filter: QRStatus = Query(default=QRStatus.ACTIVE, alias="status"),
+    product_id: uuid.UUID | None = Query(default=None),
+    limit: int = Query(default=200, ge=1, le=2000),
+    per_page: int = Query(default=20),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+) -> Response:
+    if per_page not in GRIDS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"per_page must be one of {sorted(GRIDS)}",
+        )
+    conditions = [QRCode.status == status_filter]
+    if product_id is not None:
+        conditions.append(QRCode.product_id == product_id)
+    rows = db.execute(
+        select(QRCode)
+        .options(joinedload(QRCode.product))
+        .where(*conditions)
+        .order_by(QRCode.created_at.desc(), QRCode.qr_id.desc())
+        .limit(limit)
+    ).scalars().all()
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No QR codes match these filters",
+        )
+    pdf = build_pdf([(qr.code, qr.coin_value, qr.product.sku) for qr in rows], per_page)
+    return _pdf_response(pdf, f"qr-codes-{len(rows)}.pdf", len(rows))
+
+
 @router.get("/{qr_id}", response_model=QRAdminRead)
 def get_qr_detail(
     qr_id: uuid.UUID,
@@ -192,6 +246,44 @@ def _insert_with_unique_code(db: Session, payload: QRAdminCreate) -> QRCode:
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="Could not allocate a unique QR code",
+    )
+
+
+def _insert_batch(db: Session, payload: QRBatchCreate) -> list[str]:
+    codes: set[str] = set()
+    while len(codes) < payload.count:
+        codes.add(f"{CODE_PREFIX}{secrets.token_hex(8).upper()}")
+    ordered = sorted(codes)
+    db.add_all(
+        QRCode(
+            code=code,
+            product_id=payload.product_id,
+            coin_value=payload.coin_value,
+            status=QRStatus.ACTIVE,
+            expires_at=payload.expires_at,
+        )
+        for code in ordered
+    )
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not allocate unique QR codes, try again",
+        )
+    return ordered
+
+
+def _pdf_response(pdf: bytes, filename: str, count: int) -> Response:
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-QR-Count": str(count),
+            "Access-Control-Expose-Headers": "X-QR-Count, Content-Disposition",
+        },
     )
 
 

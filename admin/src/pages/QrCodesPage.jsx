@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api } from '../api'
+import { api, saveFile } from '../api'
+import BatchQrModal from '../components/BatchQrModal'
 import CreateQrModal from '../components/CreateQrModal'
 import { ErrorBanner, formatDate, Spinner, StatusPill } from '../components/ui'
 
@@ -14,6 +15,8 @@ export default function QrCodesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [creating, setCreating] = useState(false)
+  const [batching, setBatching] = useState(false)
+  const [printing, setPrinting] = useState(false)
   const [flash, setFlash] = useState(null)
   const [busyId, setBusyId] = useState(null)
 
@@ -46,6 +49,30 @@ export default function QrCodesPage() {
     setOffset(0)
     setFlash(`QR code ${created.code} created`)
     load()
+  }
+
+  const onBatchCreated = (created) => {
+    setBatching(false)
+    setStatus('')
+    setOffset(0)
+    setFlash(`${created} QR codes created, the PDF was downloaded`)
+    load()
+  }
+
+  const printExisting = async () => {
+    const label = status || 'active'
+    if (!window.confirm(`Download a PDF of up to 200 ${label} QR codes (newest first)?`)) return
+    setPrinting(true)
+    setError(null)
+    try {
+      const { blob, count } = await api.printQrs({ status: label, limit: 200 })
+      saveFile(blob, `qr-codes-${label}-${count}.pdf`)
+      setFlash(`PDF with ${count} ${label} QR code(s) downloaded`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setPrinting(false)
+    }
   }
 
   const changeStatus = async (qr) => {
@@ -81,8 +108,14 @@ export default function QrCodesPage() {
           <button className="btn btn-ghost" onClick={load} disabled={loading}>
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
-          <button className="btn btn-primary" onClick={() => setCreating(true)}>
+          <button className="btn btn-ghost" onClick={printExisting} disabled={printing}>
+            {printing ? 'Preparing PDF…' : 'Print PDF'}
+          </button>
+          <button className="btn btn-ghost" onClick={() => setCreating(true)}>
             Create QR
+          </button>
+          <button className="btn btn-primary" onClick={() => setBatching(true)}>
+            Generate for print
           </button>
         </div>
       </div>
@@ -193,6 +226,7 @@ export default function QrCodesPage() {
       )}
 
       {creating && <CreateQrModal onCreated={onCreated} onClose={() => setCreating(false)} />}
+      {batching && <BatchQrModal onCreated={onBatchCreated} onClose={() => setBatching(false)} />}
     </div>
   )
 }
