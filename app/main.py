@@ -87,9 +87,11 @@ async def cache_headers(request, call_next):
     elif path in REVALIDATE_EXACT or path in ("/app/", "/admin-ui/"):
         # Stable names, changing content: must be checked on every load.
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
-    elif path.startswith("/media/"):
+    elif path.startswith("/media/") and response.status_code == 200:
         # Artwork changes only when a designer replaces a file, and a short
-        # window of staleness there costs nothing.
+        # window of staleness there costs nothing. Only successful responses
+        # are cached: a cached 404 would hide a file for an hour after it is
+        # uploaded.
         response.headers["Cache-Control"] = "public, max-age=3600"
 
     return response
